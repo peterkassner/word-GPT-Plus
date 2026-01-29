@@ -1,4 +1,15 @@
+/* stylelint-disable nesting-selector-no-missing-scoping-root */
 @import 'tailwindcss';
+
+
+@utility no-scrollbar {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 
 @theme {
   --background-image-custom: var(--background-image, none);

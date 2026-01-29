@@ -8,151 +8,233 @@
     @restore="handleRestore"
     @select-thread="handleSelectThread"
   />
-  <div v-show="!showCheckpoints" class="copilot-chat">
-    <!-- Header -->
-    <div class="chat-header">
-      <div class="header-left">
-        <Sparkles :size="18" />
-        <span class="app-title">Word GPT+</span>
-      </div>
-      <div class="header-right">
-        <button class="new-chat-btn" :title="$t('newChat')" @click="startNewChat">
-          <Plus :size="18" />
-        </button>
-        <button class="settings-icon-btn" :title="$t('settings')" @click="settings">
-          <Settings :size="18" />
-        </button>
-        <button class="history-icon-btn" :title="$t('checkPoints')" @click="checkPoints">
-          <History :size="18" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Quick Actions Bar -->
-    <div class="quick-actions">
-      <button
-        v-for="action in quickActions"
-        :key="action.key"
-        class="quick-action-btn"
-        :title="action.label"
-        :disabled="loading"
-        @click="applyQuickAction(action.key)"
-      >
-        <component :is="action.icon" :size="16" />
-      </button>
-      <select v-model="selectedPromptId" class="prompt-selector" :disabled="loading" @change="loadSelectedPrompt">
-        <option value="">{{ $t('selectPrompt') }}</option>
-        <option v-for="prompt in savedPrompts" :key="prompt.id" :value="prompt.id">
-          {{ prompt.name }}
-        </option>
-      </select>
-    </div>
-
-    <!-- Chat Messages Container -->
-    <div ref="messagesContainer" class="chat-messages">
-      <div v-if="history.length === 0" class="empty-state">
-        <Sparkles :size="32" />
-        <p class="empty-title">
-          {{ $t('emptyTitle') }}
-        </p>
-        <p class="empty-subtitle">
-          {{ $t('emptySubtitle') }}
-        </p>
-      </div>
-
-      <div
-        v-for="(msg, index) in displayHistory"
-        :key="msg.id || index"
-        class="message"
-        :class="msg instanceof AIMessage ? 'assistant' : 'user'"
-      >
-        <div class="message-content">
-          <div class="message-text">
-            <template v-for="(segment, idx) in renderSegments(msg)" :key="idx">
-              <span v-if="segment.type === 'text'">{{ segment.text.trim() }}</span>
-              <details v-else class="think-block">
-                <summary>Thought process</summary>
-                <pre>{{ segment.text.trim() }}</pre>
-              </details>
-            </template>
-          </div>
-          <div v-if="msg instanceof AIMessage" class="message-actions">
-            <button
-              class="action-icon"
-              :title="$t('replaceSelectedText')"
-              @click="insertToDocument(cleanMessageText(msg), 'replace')"
-            >
-              <FileText :size="12" />
-            </button>
-            <button
-              class="action-icon"
-              :title="$t('appendToSelection')"
-              @click="insertToDocument(cleanMessageText(msg), 'append')"
-            >
-              <Plus :size="12" />
-            </button>
-            <button class="action-icon" :title="$t('copyToClipboard')" @click="copyToClipboard(cleanMessageText(msg))">
-              <Copy :size="12" />
-            </button>
-          </div>
+  <div
+    v-show="!showCheckpoints"
+    class="itemse-center relative flex h-full w-full flex-col justify-center bg-bg-secondary p-1"
+  >
+    <div class="relative flex h-full w-full flex-col gap-1 rounded-md">
+      <!-- Header -->
+      <div class="flex justify-between rounded-sm p-1">
+        <div class="flex flex-1 items-center gap-2 text-accent">
+          <Sparkles :size="18" />
+          <span class="text-sm font-semibold text-main">Word GPT+</span>
+        </div>
+        <div class="flex items-center gap-1 rounded-md border border-accent/10">
+          <CustomButton
+            :title="t('newChat')"
+            :icon="Plus"
+            text=""
+            type="secondary"
+            class="border-none p-1!"
+            :icon-size="18"
+            @click="startNewChat"
+          />
+          <CustomButton
+            :title="t('settings')"
+            :icon="Settings"
+            text=""
+            type="secondary"
+            class="border-none p-1!"
+            :icon-size="18"
+            @click="settings"
+          />
+          <CustomButton
+            :title="t('checkPoints')"
+            :icon="History"
+            text=""
+            type="secondary"
+            class="border-none p-1!"
+            :icon-size="18"
+            @click="checkPoints"
+          />
         </div>
       </div>
-    </div>
 
-    <!-- Input Area -->
-    <div class="chat-input-container">
-      <div class="input-controls">
-        <div class="mode-selector">
-          <button class="mode-btn" :class="{ active: mode === 'ask' }" title="Ask Mode" @click="mode = 'ask'">
-            <MessageSquare :size="14" />
-          </button>
-          <button class="mode-btn" :class="{ active: mode === 'agent' }" title="Agent Mode" @click="mode = 'agent'">
-            <BotMessageSquare :size="17" />
-          </button>
-        </div>
-        <div class="model-controls">
-          <select v-model="settingForm.api" class="compact-select">
-            <option v-for="item in settingPreset.api.optionObj" :key="item.value" :value="item.value">
-              {{ item.label.replace('official', 'OpenAI') }}
-            </option>
-          </select>
-          <select
-            v-model="currentModelSelect"
-            class="compact-select"
-            :disabled="!currentModelOptions || currentModelOptions.length === 0"
-          >
-            <option v-for="item in currentModelOptions" :key="item" :value="item">
-              {{ item }}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div class="input-wrapper">
-        <textarea
-          ref="inputTextarea"
-          v-model="userInput"
-          class="chat-input"
-          :placeholder="mode === 'ask' ? $t('askAnything') : $t('directTheAgent')"
-          rows="1"
-          @keydown.enter.exact.prevent="sendMessage"
-          @input="adjustTextareaHeight"
+      <!-- Quick Actions Bar -->
+      <div class="flex w-full items-center justify-center gap-2 overflow-hidden rounded-md">
+        <CustomButton
+          v-for="action in quickActions"
+          :key="action.key"
+          :title="action.label"
+          text=""
+          :icon="action.icon"
+          type="secondary"
+          :icon-size="16"
+          class="shrink-0! bg-surface! p-1.5!"
+          :disabled="loading"
+          @click="applyQuickAction(action.key)"
         />
-        <button v-if="loading" class="stop-btn" title="Stop" @click="stopGeneration">
-          <Square :size="18" />
-        </button>
-        <button v-else class="send-btn" title="Send" :disabled="!userInput.trim()" @click="sendMessage">
-          <Send :size="18" />
-        </button>
+        <SingleSelect
+          v-model="selectedPromptId"
+          :key-list="savedPrompts.map(prompt => prompt.id)"
+          :placeholder="t('selectPrompt')"
+          title=""
+          :fronticon="false"
+          class="max-w-xs! flex-1! bg-surface! text-xs!"
+          @change="loadSelectedPrompt"
+        >
+          <template #item="{ item }">
+            {{ savedPrompts.find(prompt => prompt.id === item)?.name || item }}
+          </template>
+        </SingleSelect>
       </div>
-      <div class="input-footer">
-        <label class="checkbox-small">
-          <input v-model="useWordFormatting" type="checkbox" />
-          <span>{{ $t('useWordFormattingLabel') }}</span>
-        </label>
-        <label class="checkbox-small">
-          <input v-model="useSelectedText" type="checkbox" />
-          <span>{{ $t('includeSelectionLabel') }}</span>
-        </label>
+
+      <!-- Chat Messages Container -->
+      <div
+        ref="messagesContainer"
+        class="flex flex-1 flex-col gap-4 overflow-y-auto rounded-md border border-border-secondary bg-surface p-2 shadow-sm"
+      >
+        <div
+          v-if="history.length === 0"
+          class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center text-accent"
+        >
+          <Sparkles :size="32" />
+          <p class="font-semibold text-main">
+            {{ $t('emptyTitle') }}
+          </p>
+          <p class="text-xs font-semibold text-secondary">
+            {{ $t('emptySubtitle') }}
+          </p>
+        </div>
+
+        <div
+          v-for="(msg, index) in displayHistory"
+          :key="msg.id || index"
+          class="group flex items-end gap-4 [.user]:flex-row-reverse"
+          :class="msg instanceof AIMessage ? 'assistant' : 'user'"
+        >
+          <div
+            class="flex min-w-0 flex-1 flex-col gap-1 group-[.assistant]:items-start group-[.assistant]:text-left group-[.user]:items-end group-[.user]:text-left"
+          >
+            <div
+              class="group max-w-[95%] rounded-md border border-border-secondary p-1 text-sm leading-[1.4] wrap-break-word whitespace-pre-wrap text-main/90 shadow-sm group-[.assistant]:bg-bg-tertiary group-[.assistant]:text-left group-[.user]:bg-accent/10"
+            >
+              <template v-for="(segment, idx) in renderSegments(msg)" :key="idx">
+                <span v-if="segment.type === 'text'">{{ segment.text.trim() }}</span>
+                <details v-else class="mb-1 rounded-sm border border-border-secondary bg-bg-secondary">
+                  <summary class="cursor-pointer list-none p-1 text-sm font-semibold text-secondary">
+                    Thought process
+                  </summary>
+                  <pre class="m-0 p-1 text-xs wrap-break-word whitespace-pre-wrap text-secondary">{{
+                    segment.text.trim()
+                  }}</pre>
+                </details>
+              </template>
+            </div>
+            <div v-if="msg instanceof AIMessage" class="flex gap-1">
+              <CustomButton
+                :title="t('replaceSelectedText')"
+                text=""
+                :icon="FileText"
+                type="secondary"
+                class="bg-surface! p-1.5! text-secondary!"
+                :icon-size="12"
+                @click="insertToDocument(cleanMessageText(msg), 'replace')"
+              />
+              <CustomButton
+                :title="t('appendToSelection')"
+                text=""
+                :icon="Plus"
+                type="secondary"
+                class="bg-surface! p-1.5! text-secondary!"
+                :icon-size="12"
+                @click="insertToDocument(cleanMessageText(msg), 'append')"
+              />
+              <CustomButton
+                :title="t('copyToClipboard')"
+                text=""
+                :icon="Copy"
+                type="secondary"
+                class="bg-surface! p-1.5! text-secondary!"
+                :icon-size="12"
+                @click="copyToClipboard(cleanMessageText(msg))"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="flex flex-col gap-1 rounded-md">
+        <div class="flex items-center justify-between gap-2 overflow-hidden">
+          <div class="flex shrink-0 gap-1 rounded-sm border border-border bg-surface p-0.5">
+            <button
+              class="cursor-po flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
+              :class="{ active: mode === 'ask' }"
+              title="Ask Mode"
+              @click="mode = 'ask'"
+            >
+              <MessageSquare :size="14" />
+            </button>
+            <button
+              class="cursor-po flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
+              :class="{ active: mode === 'agent' }"
+              title="Agent Mode"
+              @click="mode = 'agent'"
+            >
+              <BotMessageSquare :size="17" />
+            </button>
+          </div>
+          <div class="flex min-w-0 flex-1 gap-1 overflow-hidden">
+            <select
+              v-model="settingForm.api"
+              class="h-7 max-w-full min-w-0 cursor-pointer rounded-md border border-border bg-surface p-1 text-xs text-secondary hover:border-accent focus:outline-none disabled:cursor-not-allowed disabled:bg-secondary"
+            >
+              <option v-for="item in settingPreset.api.optionObj" :key="item.value" :value="item.value">
+                {{ item.label.replace('official', 'OpenAI') }}
+              </option>
+            </select>
+            <select
+              v-if="currentModelOptions && currentModelOptions.length > 0"
+              v-model="currentModelSelect"
+              class="h-7 max-w-full min-w-0 cursor-pointer rounded-md border border-border bg-surface p-1 text-xs text-secondary hover:border-accent focus:outline-none"
+            >
+              <option v-for="item in currentModelOptions" :key="item" :value="item">
+                {{ item }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div
+          class="flex min-w-12 items-center gap-2 rounded-md border border-border bg-surface p-2 focus-within:border-accent"
+        >
+          <textarea
+            ref="inputTextarea"
+            v-model="userInput"
+            class="placeholder::text-secondary block max-h-30 flex-1 resize-none overflow-y-auto border-none bg-transparent py-2 text-xs leading-normal text-main outline-none placeholder:text-xs"
+            :placeholder="mode === 'ask' ? $t('askAnything') : $t('directTheAgent')"
+            rows="1"
+            @keydown.enter.exact.prevent="sendMessage"
+            @input="adjustTextareaHeight"
+          />
+          <button
+            v-if="loading"
+            class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-danger text-white"
+            title="Stop"
+            @click="stopGeneration"
+          >
+            <Square :size="18" />
+          </button>
+          <button
+            v-else
+            class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-accent text-white disabled:cursor-not-allowed disabled:bg-accent/50"
+            title="Send"
+            :disabled="!userInput.trim()"
+            @click="sendMessage"
+          >
+            <Send :size="18" />
+          </button>
+        </div>
+        <div class="flex justify-center gap-3 px-1">
+          <label class="flex h-3.5 w-3.5 flex-1 cursor-pointer items-center gap-1 text-xs text-secondary">
+            <input v-model="useWordFormatting" type="checkbox" />
+            <span>{{ $t('useWordFormattingLabel') }}</span>
+          </label>
+          <label class="flex h-3.5 w-3.5 flex-1 cursor-pointer items-center gap-1 text-xs text-secondary">
+            <input v-model="useSelectedText" type="checkbox" />
+            <span>{{ $t('includeSelectionLabel') }}</span>
+          </label>
+        </div>
       </div>
     </div>
   </div>
@@ -186,6 +268,8 @@ import { useRouter } from 'vue-router'
 import { type CheckpointTuple, IndexedDBSaver } from '@/api/checkpoints'
 import { insertFormattedResult, insertResult } from '@/api/common'
 import { getAgentResponse, getChatResponse } from '@/api/union'
+import CustomButton from '@/components/CustomButton.vue'
+import SingleSelect from '@/components/SingleSelect.vue'
 import CheckPointsPage from '@/pages/checkPointsPage.vue'
 import { checkAuth } from '@/utils/common'
 import { buildInPrompt, getBuiltInPrompt } from '@/utils/constant'
@@ -923,5 +1007,3 @@ onBeforeMount(() => {
   }
 })
 </script>
-
-<style scoped src="./HomePage.css"></style>
