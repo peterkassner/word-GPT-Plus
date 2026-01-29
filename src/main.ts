@@ -1,7 +1,5 @@
-import 'element-plus/dist/index.css'
 import './index.css'
 
-import ElementUI from 'element-plus'
 import { createApp } from 'vue'
 
 import App from './App.vue'
@@ -31,6 +29,5 @@ window.Office.onReady(() => {
   }
   app.use(i18n)
   app.use(router)
-  app.use(ElementUI)
   app.mount('#app')
 })
