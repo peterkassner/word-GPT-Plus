@@ -1,3 +1,13 @@
+##  (2026-01-29)
+
+* :arrow_up: Upgrade(custom): upgrade deps to latest 5334b5d
+* :construction: WIP(custom): migrate to tailwindcss 14233b9
+* :sparkles: Feature(custom): mirgrate to tailwindcss a7b3fe7
+* Feature/checkpoint clean (#139) a4fe60c, closes #139
+* fix setting Router caused homepage destroy (#146) be9ee23, closes #146
+
+
+
 ##  (2026-01-04)
 
 * :bug: Fix(custom): resolve issue where eslint not triggering and remove new Func usage 82204df
