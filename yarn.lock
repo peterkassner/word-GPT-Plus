@@ -858,9 +858,9 @@
     zod "^3.25.76 || ^4"
 
 "@langchain/google-genai@^2.1.13":
-  version "2.1.13"
-  resolved "https://registry.yarnpkg.com/@langchain/google-genai/-/google-genai-2.1.13.tgz#98c4a3f9787996c2a4ea9f7195c131b9f375aa2e"
-  integrity sha512-XWypAcTV8c32H+83ktfjgkzPC6hO/EmCz/G78HlYddAkJ0MP7kSeZ5+MIzFbdl6ShCLbIiTH+NZ9OLE+75cWfA==
+  version "2.1.28"
+  resolved "https://registry.yarnpkg.com/@langchain/google-genai/-/google-genai-2.1.28.tgz#94dc5d6599cb7210bd1e7a9a1ca14bae61bb6d58"
+  integrity sha512-iTzNYWST8hTRqOXZdme18tq5GnCUwtrrJECE51ZCjg6Vg0mPsV44amdC+/bc+UK0+uphKWESGWs277aAyM2MlA==
   dependencies:
     "@google/generative-ai" "^0.24.0"
     uuid "^11.1.0"
