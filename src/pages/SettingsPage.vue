@@ -46,6 +46,22 @@
             class="flex h-full w-full flex-col items-center gap-2 bg-bg-secondary p-1"
           >
             <SettingCard>
+              <label class="flex items-center justify-between gap-2 text-sm text-secondary">
+                <span>{{ t('settingEnableProxy') }}</span>
+                <input v-model="enableProxy" type="checkbox" />
+              </label>
+            </SettingCard>
+            <SettingCard v-if="enableProxy">
+              <CustomInput
+                v-model="proxyEndpoint"
+                :title="t('settingProxy')"
+                :placeholder="t('settingProxyHost')"
+              />
+              <p class="px-3 py-1 text-xs text-secondary">
+                {{ t('settingProxyHost') }}: <span class="text-main">http://localhost:3100</span>
+              </p>
+            </SettingCard>
+            <SettingCard>
               <SingleSelect
                 v-model="settingForm.localLanguage"
                 :tight="false"
@@ -450,6 +466,7 @@ import CustomInput from '@/components/CustomInput.vue'
 import SettingCard from '@/components/SettingCard.vue'
 import SettingSection from '@/components/SettingSection.vue'
 import SingleSelect from '@/components/SingleSelect.vue'
+import { localStorageKey } from '@/utils/enum'
 import { getLabel, getPlaceholder } from '@/utils/common'
 import { availableAPIs, buildInPrompt } from '@/utils/constant'
 import { getGeneralToolDefinitions } from '@/utils/generalTools'
@@ -461,6 +478,8 @@ const router = useRouter()
 const settingForm = useSettingForm()
 
 const currentTab = ref('provider')
+const enableProxy = ref(localStorage.getItem(localStorageKey.enableProxy) === 'true')
+const proxyEndpoint = ref(localStorage.getItem(localStorageKey.proxy) || '')
 
 // Word tools list
 const wordToolsList = [...getGeneralToolDefinitions(), ...getWordToolDefinitions()]
@@ -641,6 +660,22 @@ const addWatch = () => {
       { deep: true },
     )
   })
+}
+
+const addProxyWatch = () => {
+  watch(
+    () => enableProxy.value,
+    value => {
+      localStorage.setItem(localStorageKey.enableProxy, String(value))
+    },
+  )
+
+  watch(
+    () => proxyEndpoint.value,
+    value => {
+      localStorage.setItem(localStorageKey.proxy, value.trim())
+    },
+  )
 }
 
 const loadPrompts = () => {
@@ -854,6 +889,7 @@ onBeforeMount(() => {
   loadBuiltInPrompts()
   loadToolPreferences()
   addWatch()
+  addProxyWatch()
 })
 
 function backToHome() {

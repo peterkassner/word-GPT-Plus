@@ -6,6 +6,8 @@ node_modules
 # local env files
 .env.local
 .env.*.local
+# proxy logs (mounted for Finder visibility)
+word-gpt-plus-logs
 
 # Log files
 npm-debug.log*

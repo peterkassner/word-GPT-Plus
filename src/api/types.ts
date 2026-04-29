@@ -13,6 +13,11 @@ export interface BaseChatCompletionOptions {
   onStream: (text: string) => void
 }
 
+interface ProxyOptions {
+  enabled: boolean
+  baseURL?: string
+}
+
 export interface OpenAIOptions extends BaseChatCompletionOptions {
   provider: 'official'
   model?: string
@@ -21,6 +26,7 @@ export interface OpenAIOptions extends BaseChatCompletionOptions {
     baseURL?: string
     dangerouslyAllowBrowser?: boolean
   }
+  proxy?: ProxyOptions
 }
 
 export interface OllamaOptions extends BaseChatCompletionOptions {
@@ -62,6 +68,7 @@ export interface AgentOptions extends BaseChatCompletionOptions {
   checkpointId?: string
   // Provider-specific options
   model?: string
+  proxy?: ProxyOptions
   config?: {
     apiKey: string
     baseURL?: string

@@ -126,9 +126,20 @@ Choose the method that best suits your needs:
    docker run -d -p 3000:80 kuingsmile/word-gpt-plus
    ```
 
-2. Download [manifest.xml](https://github.com/Kuingsmile/word-GPT-Plus/blob/master/release/self-hosted/manifest.xml).
-3. Edit `manifest.xml`: Replace all instances of `http://localhost:3000` with your server's address.
-4. Proceed to the [Add-in Installation Guide](#add-in-installation-guide).
+2. For host-visible, persisted stream logs, use compose:
+
+   ```bash
+   mkdir -p word-gpt-plus-logs
+   docker compose up --build
+   ```
+
+   Logs will be written under `./word-gpt-plus-logs`.
+
+   Then in the Word add-in settings, enable proxy and set proxy URL to `http://localhost:3100`.
+
+3. Download [manifest.xml](https://github.com/Kuingsmile/word-GPT-Plus/blob/master/release/self-hosted/manifest.xml).
+4. Edit `manifest.xml`: Replace all instances of `http://localhost:3000` with your server's address.
+5. Proceed to the [Add-in Installation Guide](#add-in-installation-guide).
 
 </details>
 

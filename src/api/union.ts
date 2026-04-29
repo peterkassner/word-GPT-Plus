@@ -21,11 +21,13 @@ import {
 const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   official: (opts: OpenAIOptions) => {
     const modelName = opts.model || 'gpt-5'
+    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+    const baseURL = hasProxy ? `${opts.proxy.baseURL}/api/openai/v1` : opts.config.baseURL || 'https://api.openai.com/v1'
     return new ChatOpenAI({
       modelName,
       configuration: {
         apiKey: opts.config.apiKey,
-        baseURL: opts.config.baseURL || 'https://api.openai.com/v1',
+        baseURL,
       },
       temperature: opts.temperature ?? 0.7,
       maxTokens: opts.maxTokens ?? 800,

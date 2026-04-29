@@ -410,6 +410,20 @@ const insertType = ref<insertTypes>('replace')
 
 const errorIssue = ref<boolean | string | null>(false)
 
+const getProxyConfig = () => {
+  const enabled = localStorage.getItem(localStorageKey.enableProxy) === 'true'
+  const proxyUrl = localStorage.getItem(localStorageKey.proxy)?.trim().replace(/\/$/, '')
+
+  if (!enabled || !proxyUrl) {
+    return undefined
+  }
+
+  return {
+    enabled: true,
+    baseURL: `${proxyUrl}`,
+  }
+}
+
 const displayHistory = computed(() => {
   return history.value.filter(msg => !(msg instanceof SystemMessage))
 })
@@ -697,6 +711,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         baseURL: settings.officialBasePath,
         dangerouslyAllowBrowser: true,
       },
+      proxy: getProxyConfig(),
       maxTokens: settings.officialMaxTokens,
       temperature: settings.officialTemperature,
       model: settings.officialModelSelect,
