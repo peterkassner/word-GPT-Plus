@@ -35,6 +35,12 @@ export interface GroqOptions extends BaseChatCompletionOptions {
   groqAPIKey: string
 }
 
+export interface OpenRouterOptions extends BaseChatCompletionOptions {
+  provider: 'openrouter'
+  openrouterModel: string
+  openrouterAPIKey: string
+}
+
 export interface GeminiOptions extends BaseChatCompletionOptions {
   provider: 'gemini'
   geminiModel?: string
@@ -49,9 +55,15 @@ export interface AzureOptions extends BaseChatCompletionOptions {
   azureAPIVersion?: string
 }
 
-export type ProviderOptions = OpenAIOptions | OllamaOptions | GroqOptions | GeminiOptions | AzureOptions
+export type ProviderOptions =
+  | OpenAIOptions
+  | OllamaOptions
+  | GroqOptions
+  | GeminiOptions
+  | AzureOptions
+  | OpenRouterOptions
 
-type supportedProviders = 'official' | 'ollama' | 'groq' | 'gemini' | 'azure'
+type supportedProviders = 'official' | 'ollama' | 'groq' | 'gemini' | 'azure' | 'openrouter'
 // Agent options with tools support
 export interface AgentOptions extends BaseChatCompletionOptions {
   provider: supportedProviders
@@ -77,4 +89,6 @@ export interface AgentOptions extends BaseChatCompletionOptions {
   azureAPIEndpoint?: string
   azureDeploymentName?: string
   azureAPIVersion?: string
+  openrouterModel?: string
+  openrouterAPIKey?: string
 }

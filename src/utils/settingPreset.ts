@@ -1,7 +1,13 @@
 import { i18n } from '@/i18n'
 
 import { forceNumber, optionLists } from './common'
-import { availableModels, availableModelsForGemini, availableModelsForGroq, availableModelsForOllama } from './constant'
+import {
+  availableModels,
+  availableModelsForGemini,
+  availableModelsForGroq,
+  availableModelsForOllama,
+  availableModelsForOpenRouter,
+} from './constant'
 import { localStorageKey } from './enum'
 
 type componentType = 'input' | 'select' | 'inputNum'
@@ -71,6 +77,12 @@ export const Setting_Names = [
   'groqModelSelect',
   'groqCustomModel',
   'groqCustomModels',
+  'openrouterAPIKey',
+  'openrouterTemperature',
+  'openrouterMaxTokens',
+  'openrouterModelSelect',
+  'openrouterCustomModel',
+  'openrouterCustomModels',
   'systemPrompt',
   'userPrompt',
   'agentMaxIterations',
@@ -173,6 +185,12 @@ export const settingPreset = {
   groqModelSelect: selectSetting('qwen/qwen3-32b', 'groqModel', availableModelsForGroq),
   groqCustomModel: inputSetting(''),
   groqCustomModels: customModelsetting('groqCustomModels', 'groqCustomModel'),
+  openrouterAPIKey: inputSetting(''),
+  openrouterTemperature: inputNumSetting(0.7, 'openrouterTemperature', 'temperature'),
+  openrouterMaxTokens: inputNumSetting(800, 'openrouterMaxTokens', 'maxTokens'),
+  openrouterModelSelect: selectSetting('openrouter/auto', 'openrouterModel', availableModelsForOpenRouter),
+  openrouterCustomModel: inputSetting(''),
+  openrouterCustomModels: customModelsetting('openrouterCustomModels', 'openrouterCustomModel'),
   systemPrompt: inputSetting('', 'defaultSystemPrompt'),
   userPrompt: inputSetting('', 'defaultPrompt'),
   agentMaxIterations: inputNumSetting(25, 'agentMaxIterations', 'maxTokens'),

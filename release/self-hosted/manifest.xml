@@ -20,8 +20,8 @@
   <Description DefaultValue="Integrate the Power of AI Directly into Word"/>
 
   <!-- Icon for your add-in. Used on installation screens and the add-ins dialog. -->
-  <IconUrl DefaultValue="http://localhost:3000/assets/icon-32.png" />
-  <HighResolutionIconUrl DefaultValue="http://localhost:3000/assets/icon-80.png"/>
+  <IconUrl DefaultValue="http://192.168.1.71:3232/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="http://192.168.1.71:3232/assets/icon-80.png"/>
 
   <!--If you plan to submit this add-in to the Office Store, uncomment the SupportUrl element below-->
   <!--<SupportUrl DefaultValue="[Insert the URL of a page that provides support information for the app]" />-->
@@ -39,7 +39,7 @@
     <Host Name="Document" />
   </Hosts>
   <DefaultSettings>
-    <SourceLocation DefaultValue="http://localhost:3000/index.html" />
+    <SourceLocation DefaultValue="http://192.168.1.71:3232/index.html" />
   </DefaultSettings>
   <!-- End TaskPane Mode integration.  -->
 
@@ -119,14 +119,14 @@
     <!-- You can use resources across hosts and form factors. -->
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="http://localhost:3000/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="http://localhost:3000/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="http://localhost:3000/assets/icon-80.png"/>
+        <bt:Image id="Icon.16x16" DefaultValue="http://192.168.1.71:3232/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="http://192.168.1.71:3232/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="http://192.168.1.71:3232/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://go.microsoft.com/fwlink/?LinkId=276812" />
-        <bt:Url id="Commands.Url" DefaultValue="http://localhost:3000/commands.html" />
-        <bt:Url id="Taskpane.Url" DefaultValue="http://localhost:3000/index.html" />
+        <bt:Url id="Commands.Url" DefaultValue="http://192.168.1.71:3232/commands.html" />
+        <bt:Url id="Taskpane.Url" DefaultValue="http://192.168.1.71:3232/index.html" />
       </bt:Urls>
       <!-- ShortStrings max characters==125. -->
       <bt:ShortStrings>

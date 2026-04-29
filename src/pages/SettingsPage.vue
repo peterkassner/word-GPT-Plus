@@ -103,17 +103,14 @@
                 :title="$t('providerLabel')"
                 :fronticon="false"
                 :placeholder="
-                  settingPreset.api.optionObj
-                    .find(option => option.value === settingForm.api)
-                    ?.label.replace('official', 'OpenAI') || settingForm.api
+                  formatProviderLabel(
+                    settingPreset.api.optionObj.find(option => option.value === settingForm.api)?.value ||
+                      settingForm.api,
+                  )
                 "
               >
                 <template #item="{ item }">
-                  {{
-                    settingPreset.api.optionObj
-                      .find(option => option.value === item)
-                      ?.label.replace('official', 'OpenAI') || item
-                  }}
+                  {{ formatProviderLabel(item) }}
                 </template>
               </SingleSelect>
             </SettingCard>
@@ -450,7 +447,7 @@ import CustomInput from '@/components/CustomInput.vue'
 import SettingCard from '@/components/SettingCard.vue'
 import SettingSection from '@/components/SettingSection.vue'
 import SingleSelect from '@/components/SingleSelect.vue'
-import { getLabel, getPlaceholder } from '@/utils/common'
+import { formatProviderLabel, getLabel, getPlaceholder } from '@/utils/common'
 import { availableAPIs, buildInPrompt } from '@/utils/constant'
 import { getGeneralToolDefinitions } from '@/utils/generalTools'
 import useSettingForm from '@/utils/settingForm'
@@ -569,7 +566,7 @@ const getCustomModelsKey = (platform: string): SettingNames | null => {
 }
 
 const loadCustomModels = () => {
-  const platforms = ['official', 'gemini', 'ollama', 'groq']
+  const platforms = Object.keys(availableAPIs)
   platforms.forEach(platform => {
     const key = getCustomModelsKey(platform)
     if (key && settingPreset[key].getFunc) {

@@ -44,6 +44,13 @@ export const localStorageKey = {
   groqModel: 'groqModel',
   groqCustomModel: 'groqCustomModel',
   groqCustomModels: 'groqCustomModels',
+  // openrouter api
+  openrouterAPIKey: 'openrouterAPIKey',
+  openrouterTemperature: 'openrouterTemperature',
+  openrouterMaxTokens: 'openrouterMaxTokens',
+  openrouterModel: 'openrouterModel',
+  openrouterCustomModel: 'openrouterCustomModel',
+  openrouterCustomModels: 'openrouterCustomModels',
   // proxy
   enableProxy: 'enableProxy',
   proxy: 'proxy',

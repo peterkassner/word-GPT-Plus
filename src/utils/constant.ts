@@ -49,6 +49,7 @@ export const availableAPIs: IStringKeyMap = {
   gemini: 'gemini',
   ollama: 'ollama',
   groq: 'groq',
+  openrouter: 'openrouter',
 }
 
 // official API 可用的模型
@@ -104,6 +105,20 @@ export const availableModelsForGroq: string[] = [
   'meta-llama/llama-prompt-guard-2-86m',
   'moonshotai/kimi-k2-instruct-0905',
   'qwen/qwen3-32b',
+]
+
+// OpenRouter API 可用的模型
+export const availableModelsForOpenRouter: string[] = [
+  'openrouter/auto',
+  'openai/gpt-5.2',
+  'openai/gpt-5.1',
+  'anthropic/claude-sonnet-4.6',
+  'google/gemini-3-pro-preview',
+  'deepseek/deepseek-r1',
+  'mistralai/mistral-large',
+  'meta-llama/llama-3.3-70b-instruct',
+  'qwen/qwen3-235b-a22b',
+  'x-ai/grok-4.1-fast',
 ]
 export const buildInPrompt = {
   translate: {

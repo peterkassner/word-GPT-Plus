@@ -17,10 +17,23 @@ export function checkAuth(auth: Auth): boolean {
       return !!auth.geminiAPIKey
     case 'groq':
       return !!auth.groqAPIKey
+    case 'openrouter':
+      return !!auth.openrouterAPIKey
     case 'ollama':
       return true
     default:
       return false
+  }
+}
+
+export function formatProviderLabel(provider: string): string {
+  switch (provider) {
+    case 'official':
+      return 'OpenAI'
+    case 'openrouter':
+      return 'OpenRouter'
+    default:
+      return provider
   }
 }
 

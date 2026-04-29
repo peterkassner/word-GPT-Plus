@@ -15,6 +15,7 @@ import {
   GroqOptions,
   OllamaOptions,
   OpenAIOptions,
+  OpenRouterOptions,
   ProviderOptions,
 } from './types'
 
@@ -46,6 +47,18 @@ const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
       apiKey: opts.groqAPIKey,
       temperature: opts.temperature ?? 0.5,
       maxTokens: opts.maxTokens ?? 1024,
+    })
+  },
+
+  openrouter: (opts: OpenRouterOptions) => {
+    return new ChatOpenAI({
+      modelName: opts.openrouterModel || 'openrouter/auto',
+      configuration: {
+        apiKey: opts.openrouterAPIKey,
+        baseURL: 'https://openrouter.ai/api/v1',
+      },
+      temperature: opts.temperature ?? 0.7,
+      maxTokens: opts.maxTokens ?? 800,
     })
   },
 
