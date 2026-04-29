@@ -39,6 +39,7 @@ export interface GroqOptions extends BaseChatCompletionOptions {
   provider: 'groq'
   groqModel: string
   groqAPIKey: string
+  proxy?: ProxyOptions
 }
 
 export interface GeminiOptions extends BaseChatCompletionOptions {

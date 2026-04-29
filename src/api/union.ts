@@ -43,8 +43,10 @@ const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   },
 
   groq: (opts: GroqOptions) => {
+    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
     return new ChatGroq({
       model: opts.groqModel,
+      baseUrl: hasProxy ? `${opts.proxy.baseURL}/api/groq/v1` : undefined,
       apiKey: opts.groqAPIKey,
       temperature: opts.temperature ?? 0.5,
       maxTokens: opts.maxTokens ?? 1024,

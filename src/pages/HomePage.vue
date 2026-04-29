@@ -720,6 +720,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       provider: 'groq',
       groqAPIKey: settings.groqAPIKey,
       groqModel: settings.groqModelSelect,
+      proxy: getProxyConfig(),
       maxTokens: settings.groqMaxTokens,
       temperature: settings.groqTemperature,
     },
