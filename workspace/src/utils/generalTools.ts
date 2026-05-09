@@ -2,7 +2,183 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { evaluate } from 'mathjs'
 import { z } from 'zod'
 
+import { localStorageKey } from './enum'
+
 export type GeneralToolName = 'fetchWebContent' | 'searchWeb' | 'getCurrentDate' | 'calculateMath'
+
+export const TELEMETRY_QUEUE_KEY = 'agentEventQueue'
+const DEFAULT_TELEMETRY_QUEUE_SIZE = 150
+
+export interface TelemetryEventRecord {
+  type: string
+  ts: string
+  [key: string]: unknown
+}
+
+const SENSITIVE_KEY_PATTERN = /(authorization|cookie|secret|token|password|api[_-]?key|bearer)/i
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+function toUrlOrNull(input: string): URL | null {
+  try {
+    return new URL(input)
+  } catch {
+    return null
+  }
+}
+
+function resolveProxyBaseFromStorage(): string | null {
+  const storage = getTelemetryStorage()
+  if (!storage) return null
+
+  const proxyEnabled = storage.getItem(localStorageKey.enableProxy) === 'true'
+  const proxyUrl = trimTrailingSlashes(storage.getItem(localStorageKey.proxy) || '')
+  if (proxyEnabled && proxyUrl && toUrlOrNull(proxyUrl)) {
+    return proxyUrl
+  }
+
+  const mcpProxy = trimTrailingSlashes(storage.getItem(localStorageKey.mcpProxyHubUrl) || '')
+  if (mcpProxy && toUrlOrNull(mcpProxy)) {
+    return mcpProxy
+  }
+
+  return null
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value)
+}
+
+function sanitizeTelemetryValue(value: unknown, depth = 0): unknown {
+  if (depth > 4) return '[max-depth]'
+
+  if (value === null || value === undefined) return value
+  if (typeof value === 'number' || typeof value === 'boolean') return value
+
+  if (typeof value === 'string') {
+    if (value.length > 4000) {
+      return `${value.slice(0, 4000)}...[truncated]`
+    }
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 80).map(item => sanitizeTelemetryValue(item, depth + 1))
+  }
+
+  if (typeof value === 'object') {
+    const output: Record<string, unknown> = {}
+    Object.entries(value as Record<string, unknown>).forEach(([key, inner]) => {
+      if (SENSITIVE_KEY_PATTERN.test(key)) {
+        output[key] = '[redacted]'
+      } else {
+        output[key] = sanitizeTelemetryValue(inner, depth + 1)
+      }
+    })
+    return output
+  }
+
+  return String(value)
+}
+
+function safeParseQueue(raw: string | null): TelemetryEventRecord[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function getTelemetryStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage
+  } catch {
+    try {
+      return window.sessionStorage
+    } catch {
+      return null
+    }
+  }
+}
+
+export function loadTelemetryQueue(): TelemetryEventRecord[] {
+  const storage = getTelemetryStorage()
+  if (!storage) return []
+  return safeParseQueue(storage.getItem(TELEMETRY_QUEUE_KEY))
+}
+
+export function persistTelemetryQueue(events: TelemetryEventRecord[]) {
+  const storage = getTelemetryStorage()
+  if (!storage) return
+  const rawMaxSize = storage.getItem(localStorageKey.telemetryMaxQueueSize)
+  const maxSize = Number.isFinite(Number(rawMaxSize)) ? Math.max(50, Number(rawMaxSize)) : DEFAULT_TELEMETRY_QUEUE_SIZE
+  const normalized = events.slice(-maxSize)
+  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(normalized))
+}
+
+export function appendTelemetryEvent(event: TelemetryEventRecord) {
+  const storage = getTelemetryStorage()
+  const redactSensitive = storage?.getItem(localStorageKey.telemetryRedactSensitive) !== 'false'
+  const queue = loadTelemetryQueue()
+  queue.push({
+    ...(redactSensitive ? (sanitizeTelemetryValue(event) as TelemetryEventRecord) : event),
+    queuedAt: new Date().toISOString(),
+  })
+  persistTelemetryQueue(queue)
+}
+
+export function clearTelemetryQueue() {
+  const storage = getTelemetryStorage()
+  if (!storage) return
+  storage.removeItem(TELEMETRY_QUEUE_KEY)
+}
+
+export async function flushTelemetryQueueToProxy(
+  endpoint = '/api/telemetry',
+): Promise<{ success: boolean; flushed: number }> {
+  const queue = loadTelemetryQueue()
+  const queueSize = queue.length
+
+  if (queue.length === 0) {
+    return { success: true, flushed: 0 }
+  }
+
+  const configuredBase = resolveProxyBaseFromStorage()
+  const resolvedEndpoint = isAbsoluteUrl(endpoint)
+    ? endpoint
+    : new URL(endpoint, configuredBase || window.location.origin).toString()
+
+  try {
+    const payload = { events: queue }
+    const response = await fetch(resolvedEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => '')
+      throw new Error(`Telemetry flush failed: ${response.status} ${response.statusText} ${responseText}`)
+    }
+
+    clearTelemetryQueue()
+    return { success: true, flushed: queueSize }
+  } catch (error) {
+    appendTelemetryEvent({
+      type: 'agent.telemetry.flush.failed',
+      ts: new Date().toISOString(),
+      queueSize,
+      endpoint: resolvedEndpoint,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { success: false, flushed: 0 }
+  }
+}
 
 export interface GeneralToolDefinition {
   name: GeneralToolName

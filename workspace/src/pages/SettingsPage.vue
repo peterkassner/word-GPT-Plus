@@ -62,6 +62,45 @@
               </p>
             </SettingCard>
             <SettingCard>
+              <label class="mb-2 flex items-center justify-between gap-2 text-sm text-secondary">
+                <span>Enable agent telemetry logging</span>
+                <input v-model="enableAgentTelemetry" type="checkbox" />
+              </label>
+              <CustomInput
+                v-model.number="telemetryFlushIntervalSeconds"
+                title="Telemetry flush interval (seconds)"
+                type="number"
+                :min="5"
+                :max="300"
+                :step="5"
+              />
+              <p class="px-3 pb-2 text-xs text-secondary">Queued events: {{ telemetryQueueSize }}</p>
+              <CustomButton
+                text="Flush telemetry queue now"
+                :title="'Flush telemetry queue now'"
+                type="secondary"
+                class="w-full"
+                @click="flushQueuedTelemetry"
+              />
+            </SettingCard>
+            <SettingCard>
+              <h3 class="px-3 py-2 text-sm font-semibold text-main">Configuration governance</h3>
+              <p class="px-3 pb-2 text-xs text-secondary">
+                Export current runtime and settings, or import a snapshot to restore defaults.
+              </p>
+              <div class="mb-2 flex gap-1">
+                <CustomButton text="Export config snapshot" type="secondary" class="flex-1" @click="exportConfigSnapshot" />
+                <CustomButton text="Import snapshot" type="secondary" class="flex-1" @click="importConfigSnapshot" />
+              </div>
+              <textarea v-model="configExportText" class="h-28 w-full resize-y rounded-md border border-border p-2 text-xs" />
+              <textarea
+                v-model="configImportText"
+                class="mb-2 mt-2 h-28 w-full resize-y rounded-md border border-border p-2 text-xs"
+                placeholder='Paste JSON snapshot here'
+              />
+              <p class="px-3 pb-2 text-xs text-secondary">{{ configExportState }}</p>
+            </SettingCard>
+            <SettingCard>
               <SingleSelect
                 v-model="settingForm.localLanguage"
                 :tight="false"
@@ -457,7 +496,7 @@ import {
   Wrench,
   X,
 } from 'lucide-vue-next'
-import { onBeforeMount, ref, watch } from 'vue'
+import { onBeforeMount, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -469,7 +508,7 @@ import SingleSelect from '@/components/SingleSelect.vue'
 import { localStorageKey } from '@/utils/enum'
 import { getLabel, getPlaceholder } from '@/utils/common'
 import { availableAPIs, buildInPrompt } from '@/utils/constant'
-import { getGeneralToolDefinitions } from '@/utils/generalTools'
+import { flushTelemetryQueueToProxy, getGeneralToolDefinitions, loadTelemetryQueue } from '@/utils/generalTools'
 import useSettingForm from '@/utils/settingForm'
 import { Setting_Names, SettingNames, settingPreset } from '@/utils/settingPreset'
 import { getWordToolDefinitions } from '@/utils/wordTools'
@@ -480,6 +519,10 @@ const settingForm = useSettingForm()
 const currentTab = ref('provider')
 const enableProxy = ref(localStorage.getItem(localStorageKey.enableProxy) === 'true')
 const proxyEndpoint = ref(localStorage.getItem(localStorageKey.proxy) || '')
+const enableAgentTelemetry = ref(localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false')
+const telemetryFlushIntervalSeconds = ref(Math.max(5, Number(localStorage.getItem(localStorageKey.telemetryFlushIntervalSeconds) || 30)))
+const telemetryQueueSize = ref(loadTelemetryQueue().length)
+const telemetryFlushTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
 // Word tools list
 const wordToolsList = [...getGeneralToolDefinitions(), ...getWordToolDefinitions()]
@@ -676,6 +719,145 @@ const addProxyWatch = () => {
       localStorage.setItem(localStorageKey.proxy, value.trim())
     },
   )
+}
+
+const refreshTelemetryQueueSize = () => {
+  telemetryQueueSize.value = loadTelemetryQueue().length
+}
+
+const addTelemetryWatch = () => {
+  if (telemetryFlushTimer.value !== null) {
+    clearInterval(telemetryFlushTimer.value)
+    telemetryFlushTimer.value = null
+  }
+
+  watch(
+    () => enableAgentTelemetry.value,
+    value => {
+      localStorage.setItem(localStorageKey.telemetryEnabled, String(value))
+      if (!value && telemetryFlushTimer.value !== null) {
+        clearInterval(telemetryFlushTimer.value)
+        telemetryFlushTimer.value = null
+      }
+      if (value && telemetryFlushTimer.value === null) {
+        telemetryFlushTimer.value = setInterval(() => {
+          flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+        }, telemetryFlushIntervalSeconds.value * 1000)
+      }
+    },
+  )
+
+  watch(
+    () => telemetryFlushIntervalSeconds.value,
+    value => {
+      const numeric = Number.isFinite(value) ? Math.max(5, Math.floor(value)) : 30
+      telemetryFlushIntervalSeconds.value = numeric
+      localStorage.setItem(localStorageKey.telemetryFlushIntervalSeconds, String(numeric))
+
+      if (telemetryFlushTimer.value !== null) {
+        clearInterval(telemetryFlushTimer.value)
+        telemetryFlushTimer.value = setInterval(() => {
+          flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+        }, numeric * 1000)
+      }
+    },
+  )
+
+  if (enableAgentTelemetry.value) {
+    telemetryFlushTimer.value = setInterval(() => {
+      flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+    }, telemetryFlushIntervalSeconds.value * 1000)
+  }
+}
+
+const flushQueuedTelemetry = async () => {
+  const result = await flushTelemetryQueueToProxy()
+  refreshTelemetryQueueSize()
+  return result
+}
+
+const configExportText = ref('')
+const configImportText = ref('')
+const configExportState = ref('')
+
+const buildConfigSnapshot = () => {
+  const snapshot = {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    schemaLastUpdated: new Date().toISOString(),
+    redactionEnabled: settingForm.value.telemetryRedactSensitive,
+    memorix: {
+      enableMemorixTools: settingForm.value.enableMemorixTools,
+      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
+      memorixAgentId: settingForm.value.memorixAgentId,
+      memorixToolsEndpoint: settingForm.value.memorixToolsEndpoint,
+      memorixToolsCallEndpoint: settingForm.value.memorixToolsCallEndpoint,
+      memorixToolTimeoutMs: settingForm.value.memorixToolTimeoutMs,
+      memorixMaxRetries: settingForm.value.memorixMaxRetries,
+    },
+    telemetry: {
+      telemetryEnabled: settingForm.value.telemetryEnabled,
+      telemetryFlushIntervalSeconds: settingForm.value.telemetryFlushIntervalSeconds,
+      telemetryMaxQueueSize: settingForm.value.telemetryMaxQueueSize,
+      telemetryRedactSensitive: settingForm.value.telemetryRedactSensitive,
+    },
+    settings: Object.fromEntries(
+      Setting_Names.map(key => [key, settingForm.value[key as keyof typeof settingForm.value]]),
+    ) as Record<string, unknown>,
+    runtime: {
+      enableProxy: localStorage.getItem(localStorageKey.enableProxy) === 'true',
+      proxy: localStorage.getItem(localStorageKey.proxy) || '',
+      threadId: localStorage.getItem(localStorageKey.threadId) || '',
+    },
+  }
+
+  return snapshot
+}
+
+const exportConfigSnapshot = () => {
+  const payload = buildConfigSnapshot()
+  configExportText.value = JSON.stringify(payload, null, 2)
+  configExportState.value = 'Export snapshot created'
+}
+
+const importConfigSnapshot = () => {
+  try {
+    const payload = JSON.parse(configImportText.value)
+    const settings = payload?.settings || {}
+
+    if (!settings || typeof settings !== 'object') {
+      configExportState.value = 'Invalid config payload'
+      return
+    }
+
+    Setting_Names.forEach(key => {
+      const value = settings[key]
+      if (value === undefined) return
+      const preset = settingPreset[key]
+      if (!preset) return
+      if (preset.saveFunc) {
+        preset.saveFunc(value as never)
+      } else if (preset.saveKey) {
+        localStorage.setItem(preset.saveKey, String(value))
+      }
+    })
+
+    if (payload.runtime) {
+      if (typeof payload.runtime.enableProxy === 'boolean') {
+        enableProxy.value = payload.runtime.enableProxy
+      }
+      if (typeof payload.runtime.proxy === 'string') {
+        proxyEndpoint.value = payload.runtime.proxy
+      }
+    }
+
+    configExportState.value = `Config imported at ${new Date().toLocaleString()}`
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
+  } catch (error) {
+    configExportState.value = `Import failed: ${error instanceof Error ? error.message : String(error)}`
+  }
 }
 
 const loadPrompts = () => {
@@ -890,6 +1072,14 @@ onBeforeMount(() => {
   loadToolPreferences()
   addWatch()
   addProxyWatch()
+  addTelemetryWatch()
+  refreshTelemetryQueueSize()
+})
+onBeforeUnmount(() => {
+  if (telemetryFlushTimer.value !== null) {
+    clearInterval(telemetryFlushTimer.value)
+    telemetryFlushTimer.value = null
+  }
 })
 
 function backToHome() {

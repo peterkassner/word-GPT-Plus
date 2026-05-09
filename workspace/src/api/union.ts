@@ -123,11 +123,32 @@ async function executeChatFlow(model: BaseChatModel, options: ProviderOptions): 
 }
 
 async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Promise<void> {
+  type AgentEventType = Exclude<Parameters<NonNullable<AgentOptions['onAgentEvent']>>[0]['type'], undefined>
+  const requestId = crypto.randomUUID()
+  const turnId = options.threadId || crypto.randomUUID()
+  const emitAgentEvent = (type: AgentEventType, data?: Record<string, unknown>) => {
+    if (!options.onAgentEvent) return
+    options.onAgentEvent({
+      type,
+      requestId,
+      turnId,
+      ts: new Date().toISOString(),
+      data,
+    })
+  }
+
   try {
     if (!options.threadId) {
       options.threadId = crypto.randomUUID()
       console.log(`[Agent] New thread started: ${options.threadId}`)
     }
+    emitAgentEvent('agent.turn.start', {
+      provider: options.provider,
+      toolCount: options.tools?.length || 0,
+      recursionLimit: options.recursionLimit,
+      threadId: options.threadId,
+      turnId,
+    })
     const agent = createAgent({
       model,
       tools: options.tools || [],
@@ -158,6 +179,9 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
       }
 
       stepCount++
+      emitAgentEvent('agent.step', {
+        stepIndex: stepCount,
+      })
       console.log(`[Agent] Step ${stepCount}:`, {
         messageCount: step.messages?.length || 0,
         lastMessageType: step.messages?.[step.messages.length - 1]?.constructor?.name,
@@ -181,6 +205,11 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
             name: toolCall.name,
             args: toolCall.args,
           })
+          emitAgentEvent('agent.tool.call', {
+            toolName: toolCall.name,
+            toolArgs: toolCall.args,
+            hasAgentThread: !!options.threadId,
+          })
           if (options.onToolCall) {
             options.onToolCall(toolCall.name, toolCall.args)
           }
@@ -195,6 +224,11 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
           name: toolName,
           contentLength: toolContent.length,
           contentPreview: toolContent.substring(0, 100),
+        })
+        emitAgentEvent('agent.tool.result', {
+          toolName,
+          contentLength: toolContent.length,
+          contentPreview: toolContent.substring(0, 120),
         })
         if (options.onToolResult) {
           options.onToolResult(toolName, toolContent)
@@ -215,7 +249,12 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
     }
 
     console.log('[Agent] Flow completed. Total steps:', stepCount)
+    emitAgentEvent('agent.turn.complete', { stepCount })
   } catch (error: any) {
+    emitAgentEvent('agent.error', {
+      message: error?.message || String(error),
+      name: error?.name || 'UnknownError',
+    })
     console.error('[Agent] Error:', error)
     if (error.name === 'AbortError' || options.abortSignal?.aborted) {
       throw error

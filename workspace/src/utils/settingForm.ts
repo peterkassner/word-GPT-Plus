@@ -7,7 +7,7 @@ type SettingForm = {
   [K in SettingNames]: (typeof settingPreset)[K]['defaultValue']
 }
 
-type SettingValue = string | number | string[]
+type SettingValue = string | number | string[] | boolean
 
 function initializeSettings(): Record<string, SettingValue> {
   const settings: Record<string, SettingValue> = {}

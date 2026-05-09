@@ -54,6 +54,18 @@ export const Setting_Names = [
   'azureTemperature',
   'azureMaxTokens',
   'azureAPIVersion',
+  'enableMemorixTools',
+  'mcpProxyHubUrl',
+  'memorixAgentId',
+  'memorixToolsEndpoint',
+  'memorixToolsCallEndpoint',
+  'memorixToolTimeoutMs',
+  'memorixMaxRetries',
+  'telemetryEnabled',
+  'telemetryFlushIntervalSeconds',
+  'telemetryMaxQueueSize',
+  'telemetryConfigVersion',
+  'telemetryRedactSensitive',
   'geminiAPIKey',
   'geminiCustomModel',
   'geminiCustomModels',
@@ -156,6 +168,52 @@ export const settingPreset = {
   azureTemperature: inputNumSetting(0.7, 'azureTemperature', 'temperature'),
   azureMaxTokens: inputNumSetting(800, 'azureMaxTokens', 'maxTokens'),
   azureAPIVersion: inputSetting(''),
+  enableMemorixTools: {
+    defaultValue: false,
+    saveKey: 'enableMemorixTools',
+    getFunc: () => localStorage.getItem(localStorageKey.enableMemorixTools) === 'true',
+    saveFunc: value => localStorage.setItem(localStorageKey.enableMemorixTools, String(value)),
+  },
+  mcpProxyHubUrl: inputSetting('http://localhost:3100', 'mcpProxyHubUrl'),
+  memorixAgentId: inputSetting('word-gpt-plus', 'memorixAgentId'),
+  memorixToolsEndpoint: inputSetting('/api/tools/memorix', 'memorixToolsEndpoint'),
+  memorixToolsCallEndpoint: inputSetting('/api/tools/memorix/call', 'memorixToolsCallEndpoint'),
+  memorixToolTimeoutMs: inputNumSetting(12000, 'memorixToolTimeoutMs', 'maxTokens'),
+  memorixMaxRetries: inputNumSetting(2, 'memorixMaxRetries', 'maxTokens'),
+  telemetryEnabled: {
+    defaultValue: true,
+    getFunc: () => localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false',
+    saveFunc: value => localStorage.setItem(localStorageKey.telemetryEnabled, String(value)),
+  },
+  telemetryFlushIntervalSeconds: {
+    ...inputNumSetting(30, 'telemetryFlushIntervalSeconds', 'maxTokens'),
+    saveFunc: value => {
+      const normalized = Number.isFinite(value) ? Math.max(5, Math.min(300, Math.floor(value))) : 30
+      localStorage.setItem(localStorageKey.telemetryFlushIntervalSeconds, String(normalized))
+    },
+  },
+  telemetryMaxQueueSize: {
+    ...inputNumSetting(150, 'telemetryMaxQueueSize', 'maxTokens'),
+    saveFunc: value => {
+      const normalized = Number.isFinite(value) ? Math.max(50, Math.floor(value)) : 150
+      localStorage.setItem(localStorageKey.telemetryMaxQueueSize, String(normalized))
+    },
+  },
+  telemetryConfigVersion: {
+    defaultValue: 1,
+    saveKey: 'telemetryConfigVersion',
+    getFunc: () => {
+      const stored = localStorage.getItem(localStorageKey.telemetryConfigVersion)
+      const parsed = stored ? Number.parseInt(stored, 10) : 1
+      return Number.isFinite(parsed) ? parsed : 1
+    },
+    saveFunc: value => localStorage.setItem(localStorageKey.telemetryConfigVersion, String(value)),
+  },
+  telemetryRedactSensitive: {
+    defaultValue: true,
+    getFunc: () => localStorage.getItem(localStorageKey.telemetryRedactSensitive) !== 'false',
+    saveFunc: value => localStorage.setItem(localStorageKey.telemetryRedactSensitive, String(value)),
+  },
   geminiAPIKey: inputSetting(''),
   geminiCustomModel: inputSetting(''),
   geminiCustomModels: customModelsetting('geminiCustomModels', 'geminiCustomModel'),

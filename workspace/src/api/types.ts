@@ -85,4 +85,11 @@ export interface AgentOptions extends BaseChatCompletionOptions {
   azureAPIEndpoint?: string
   azureDeploymentName?: string
   azureAPIVersion?: string
+  onAgentEvent?: (event: {
+    type: 'agent.turn.start' | 'agent.turn.complete' | 'agent.step' | 'agent.tool.call' | 'agent.tool.result' | 'agent.error'
+    requestId: string
+    turnId: string
+    ts: string
+    data?: Record<string, unknown>
+  }) => void
 }

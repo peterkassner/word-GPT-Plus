@@ -274,7 +274,13 @@ import CheckPointsPage from '@/pages/checkPointsPage.vue'
 import { checkAuth } from '@/utils/common'
 import { buildInPrompt, getBuiltInPrompt } from '@/utils/constant'
 import { localStorageKey } from '@/utils/enum'
-import { createGeneralTools, GeneralToolName } from '@/utils/generalTools'
+import {
+  appendTelemetryEvent,
+  createGeneralTools,
+  flushTelemetryQueueToProxy,
+  GeneralToolName,
+} from '@/utils/generalTools'
+import { createMemorixTools, getMemorixToolsConfigFromStorage } from '@/utils/memorixTools'
 import { message as messageUtil } from '@/utils/message'
 import useSettingForm from '@/utils/settingForm'
 import { settingPreset } from '@/utils/settingPreset'
@@ -354,10 +360,30 @@ function loadEnabledGeneralTools(): GeneralToolName[] {
   return [...allGeneralToolNames]
 }
 
-function getActiveTools() {
+async function getActiveToolsWithMemorix(): Promise<ReturnType<typeof createGeneralTools>> {
   const wordTools = createWordTools(enabledWordTools.value)
   const generalTools = createGeneralTools(enabledGeneralTools.value)
-  return [...generalTools, ...wordTools]
+
+  const config = getMemorixToolsConfigFromStorage({
+    threadId: threadId.value || undefined,
+  })
+  if (!config.enableMemorixTools) {
+    memorixToolNames.value = new Set()
+    currentMemorixAgentId.value = config.memorixAgentId || 'word-gpt-plus'
+    return [...generalTools, ...wordTools]
+  }
+
+  try {
+    currentMemorixAgentId.value = config.memorixAgentId || 'word-gpt-plus'
+    const memorixTools = await createMemorixTools(config)
+    memorixToolNames.value = new Set(memorixTools.map(tool => tool.name))
+    return [...generalTools, ...wordTools, ...memorixTools]
+  } catch (error) {
+    console.error('[Memorix] Failed to load tools', error)
+    messageUtil.error('Memorix tool discovery failed')
+    memorixToolNames.value = new Set()
+    return [...generalTools, ...wordTools]
+  }
 }
 
 function loadSavedPrompts() {
@@ -409,6 +435,42 @@ const useSelectedText = useStorage(localStorageKey.useSelectedText, true)
 const insertType = ref<insertTypes>('replace')
 
 const errorIssue = ref<boolean | string | null>(false)
+const telemetryEnabled = ref(localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false')
+const memorixToolNames = ref<Set<string>>(new Set())
+const currentMemorixAgentId = ref('word-gpt-plus')
+
+const enqueueTelemetryEvent = (event: Record<string, unknown>) => {
+  if (!telemetryEnabled.value) return
+  appendTelemetryEvent({
+    ts: new Date().toISOString(),
+    ...event,
+    type: event.type || 'agent.event',
+  })
+}
+
+const flushTelemetryQueue = async (): Promise<void> => {
+  if (!telemetryEnabled.value) return
+  const { success, flushed } = await flushTelemetryQueueToProxy()
+  if (!success && flushed === 0) {
+    console.warn('[Telemetry] Queue flush failed; events retained locally')
+  }
+}
+
+const summarizeTelemetryText = (value: string, maxLength = 1200): string => {
+  if (!value) return ''
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength)}...[truncated]`
+}
+
+const summarizeTelemetryPayload = (payload: unknown, maxLength = 1200): string => {
+  try {
+    const text = typeof payload === 'string' ? payload : JSON.stringify(payload)
+    return summarizeTelemetryText(text, maxLength)
+  } catch {
+    return '[unserializable]'
+  }
+}
 
 const getProxyConfig = () => {
   const enabled = localStorage.getItem(localStorageKey.enableProxy) === 'true'
@@ -652,9 +714,17 @@ async function applyQuickAction(actionKey: keyof typeof buildInPrompt) {
   } catch (error: any) {
     if (error.name === 'AbortError') {
       messageUtil.info(t('generationStop'))
+      enqueueTelemetryEvent({
+        type: 'agent.request.aborted',
+        error: error?.message || String(error),
+      })
     } else {
       console.error(error)
       messageUtil.error(t('failedToProcessAction'))
+      enqueueTelemetryEvent({
+        type: 'agent.request.failed',
+        error: error?.message || String(error),
+      })
       // Remove failed message
       history.value.pop()
     }
@@ -696,6 +766,20 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
     customSystemPrompt.value || systemMessage || (isAgentMode ? agentPrompt(lang) : standardPrompt(lang))
 
   const defaultSystemMessage = new SystemMessage(finalSystemMessage)
+
+  const userInputText = getMessageText(userMessage)
+  if (isAgentMode) {
+    enqueueTelemetryEvent({
+      type: 'agent.turn.input',
+      mode: 'agent',
+      threadId: threadId.value,
+      userInputLength: userInputText.length,
+      userInputPreview: summarizeTelemetryText(userInputText, 1600),
+      selectedPromptId: selectedPromptId.value || null,
+      provider,
+      model: currentModelSelect.value,
+    })
+  }
 
   // Add user message to history
   history.value.push(userMessage)
@@ -758,7 +842,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
 
   // Use agent mode with tools if enabled
   if (isAgentMode) {
-    const tools = getActiveTools()
+    const tools = await getActiveToolsWithMemorix()
 
     await getAgentResponse({
       ...currentConfig,
@@ -780,6 +864,14 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         const lastIndex = history.value.length - 1
         const currentContent = getMessageText(history.value[lastIndex])
         history.value[lastIndex] = new AIMessage(currentContent + `\n\n🔧 Calling tool: ${toolName}...`)
+        const isMemorixTool = memorixToolNames.value.has(toolName)
+        enqueueTelemetryEvent({
+          type: 'agent.tool.call',
+          toolName,
+          toolArgsPreview: summarizeTelemetryPayload(_args),
+          isMemorixTool,
+          memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+        })
         scrollToBottom()
       },
       onToolResult: (toolName: string, _result: string) => {
@@ -791,7 +883,45 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
           `✅ Tool ${toolName} completed`,
         )
         history.value[lastIndex] = new AIMessage(updatedContent)
+        const isMemorixTool = memorixToolNames.value.has(toolName)
+        enqueueTelemetryEvent({
+          type: 'agent.tool.result',
+          toolName,
+          toolResultLength: _result?.length || 0,
+          toolResultPreview: summarizeTelemetryText(_result || '', 1600),
+          isMemorixTool,
+          memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+        })
         scrollToBottom()
+      },
+      onAgentEvent: event => {
+        enqueueTelemetryEvent({
+          type: event.type,
+          requestId: event.requestId,
+          turnId: event.turnId,
+          sourceTs: event.ts,
+          threadId: threadId.value,
+          ...event.data,
+        })
+        if (event.type === 'agent.turn.complete') {
+          const lastMessage = history.value[history.value.length - 1]
+          const outputText = lastMessage ? getMessageText(lastMessage) : ''
+          enqueueTelemetryEvent({
+            type: 'agent.turn.output',
+            requestId: event.requestId,
+            turnId: event.turnId,
+            threadId: threadId.value,
+            outputLength: outputText.length,
+            outputPreview: summarizeTelemetryText(outputText, 2000),
+          })
+        }
+        if (event.type === 'agent.turn.complete' || event.type === 'agent.error') {
+          setTimeout(() => {
+            flushTelemetryQueue().catch(() => {
+              console.error('[Telemetry] flush failed')
+            })
+          }, 0)
+        }
       },
     })
   } else {
