@@ -52,11 +52,7 @@
               </label>
             </SettingCard>
             <SettingCard v-if="enableProxy">
-              <CustomInput
-                v-model="proxyEndpoint"
-                :title="t('settingProxy')"
-                :placeholder="t('settingProxyHost')"
-              />
+              <CustomInput v-model="proxyEndpoint" :title="t('settingProxy')" :placeholder="t('settingProxyHost')" />
               <p class="px-3 py-1 text-xs text-secondary">
                 {{ t('settingProxyHost') }}: <span class="text-main">http://localhost:3100</span>
               </p>
@@ -84,19 +80,175 @@
               />
             </SettingCard>
             <SettingCard>
+              <label class="mb-2 flex items-center justify-between gap-2 text-sm text-secondary">
+                <span>Enable Memorix tools</span>
+                <input v-model="settingForm.enableMemorixTools" type="checkbox" />
+              </label>
+              <p class="px-3 pb-2 text-xs text-secondary">
+                Uses MCP server <span class="text-main">Memorix</span> so Agent mode can access persisted tool metadata.
+              </p>
+              <div v-if="settingForm.enableMemorixTools" class="flex flex-col gap-2">
+                <CustomInput
+                  v-model="settingForm.mcpProxyHubUrl"
+                  title="MCP proxy hub URL"
+                  placeholder="http://127.0.0.1:8096"
+                />
+                <CustomInput
+                  v-model="settingForm.memorixAgentId"
+                  title="Memorix agent ID"
+                  placeholder="word-gpt-plus"
+                />
+                <CustomInput
+                  v-model="settingForm.memorixToolsEndpoint"
+                  title="Memorix tools list endpoint"
+                  placeholder="/api/tools/memorix"
+                />
+                <CustomInput
+                  v-model="settingForm.memorixToolsCallEndpoint"
+                  title="Memorix tools call endpoint"
+                  placeholder="/api/tools/memorix/call"
+                />
+                <CustomInput
+                  v-model.number="settingForm.memorixToolTimeoutMs"
+                  title="Memorix tool timeout (ms)"
+                  placeholder="12000"
+                  type="number"
+                  :min="1000"
+                  :max="60000"
+                  :step="500"
+                />
+                <CustomInput
+                  v-model.number="settingForm.memorixMaxRetries"
+                  title="Memorix max retries"
+                  placeholder="2"
+                  type="number"
+                  :min="0"
+                  :max="10"
+                  :step="1"
+                />
+              </div>
+            </SettingCard>
+            <SettingCard>
+              <label class="mb-2 flex items-center justify-between gap-2 text-sm text-secondary">
+                <span>Enable Qdrant precedent tools</span>
+                <input v-model="settingForm.enableQdrantResourcesTools" type="checkbox" />
+              </label>
+              <p class="px-3 pb-2 text-xs text-secondary">
+                Uses MCP server <span class="text-main">Qdrant_Resources</span> so Agent mode can reference precedent
+                files.
+              </p>
+              <div v-if="settingForm.enableQdrantResourcesTools" class="flex flex-col gap-2">
+                <CustomInput
+                  v-model="settingForm.mcpProxyHubUrl"
+                  title="MCP proxy hub URL"
+                  placeholder="http://127.0.0.1:8096"
+                />
+                <CustomInput
+                  v-model="settingForm.qdrantResourcesAgentId"
+                  title="Qdrant agent ID"
+                  placeholder="word-gpt-plus"
+                />
+                <CustomInput
+                  v-model="settingForm.qdrantResourcesToolsEndpoint"
+                  title="Qdrant tools list endpoint"
+                  placeholder="/api/tools/qdrant"
+                />
+                <CustomInput
+                  v-model="settingForm.qdrantResourcesToolsCallEndpoint"
+                  title="Qdrant tools call endpoint"
+                  placeholder="/api/tools/qdrant/call"
+                />
+                <CustomInput
+                  v-model.number="settingForm.qdrantResourcesToolTimeoutMs"
+                  title="Qdrant tool timeout (ms)"
+                  placeholder="12000"
+                  type="number"
+                  :min="1000"
+                  :max="60000"
+                  :step="500"
+                />
+                <CustomInput
+                  v-model.number="settingForm.qdrantResourcesMaxRetries"
+                  title="Qdrant max retries"
+                  placeholder="2"
+                  type="number"
+                  :min="0"
+                  :max="10"
+                  :step="1"
+                />
+              </div>
+            </SettingCard>
+            <SettingCard>
+              <label class="mb-2 flex items-center justify-between gap-2 text-sm text-secondary">
+                <span>Enable DocSuite external reference tools</span>
+                <input v-model="settingForm.enableDocSuiteReferenceTools" type="checkbox" />
+              </label>
+              <p class="px-3 pb-2 text-xs text-secondary">
+                External reference only. Current Word document operations through DocSuite are policy-blocked.
+              </p>
+              <div v-if="settingForm.enableDocSuiteReferenceTools" class="flex flex-col gap-2">
+                <CustomInput
+                  v-model="settingForm.mcpProxyHubUrl"
+                  title="MCP proxy hub URL"
+                  placeholder="http://127.0.0.1:8096"
+                />
+                <CustomInput
+                  v-model="settingForm.docSuiteAgentId"
+                  title="DocSuite agent ID"
+                  placeholder="word-gpt-plus"
+                />
+                <CustomInput
+                  v-model="settingForm.docSuiteToolsEndpoint"
+                  title="DocSuite tools list endpoint"
+                  placeholder="/api/tools/docsuite"
+                />
+                <CustomInput
+                  v-model="settingForm.docSuiteToolsCallEndpoint"
+                  title="DocSuite tools call endpoint"
+                  placeholder="/api/tools/docsuite/call"
+                />
+                <CustomInput
+                  v-model.number="settingForm.docSuiteToolTimeoutMs"
+                  title="DocSuite tool timeout (ms)"
+                  placeholder="12000"
+                  type="number"
+                  :min="1000"
+                  :max="60000"
+                  :step="500"
+                />
+                <CustomInput
+                  v-model.number="settingForm.docSuiteMaxRetries"
+                  title="DocSuite max retries"
+                  placeholder="2"
+                  type="number"
+                  :min="0"
+                  :max="10"
+                  :step="1"
+                />
+              </div>
+            </SettingCard>
+            <SettingCard>
               <h3 class="px-3 py-2 text-sm font-semibold text-main">Configuration governance</h3>
               <p class="px-3 pb-2 text-xs text-secondary">
                 Export current runtime and settings, or import a snapshot to restore defaults.
               </p>
               <div class="mb-2 flex gap-1">
-                <CustomButton text="Export config snapshot" type="secondary" class="flex-1" @click="exportConfigSnapshot" />
+                <CustomButton
+                  text="Export config snapshot"
+                  type="secondary"
+                  class="flex-1"
+                  @click="exportConfigSnapshot"
+                />
                 <CustomButton text="Import snapshot" type="secondary" class="flex-1" @click="importConfigSnapshot" />
               </div>
-              <textarea v-model="configExportText" class="h-28 w-full resize-y rounded-md border border-border p-2 text-xs" />
+              <textarea
+                v-model="configExportText"
+                class="h-28 w-full resize-y rounded-md border border-border p-2 text-xs"
+              />
               <textarea
                 v-model="configImportText"
-                class="mb-2 mt-2 h-28 w-full resize-y rounded-md border border-border p-2 text-xs"
-                placeholder='Paste JSON snapshot here'
+                class="mt-2 mb-2 h-28 w-full resize-y rounded-md border border-border p-2 text-xs"
+                placeholder="Paste JSON snapshot here"
               />
               <p class="px-3 pb-2 text-xs text-secondary">{{ configExportState }}</p>
             </SettingCard>
@@ -157,18 +309,10 @@
                 :key-list="settingPreset.api.optionObj.map(item => item.value)"
                 :title="$t('providerLabel')"
                 :fronticon="false"
-                :placeholder="
-                  settingPreset.api.optionObj
-                    .find(option => option.value === settingForm.api)
-                    ?.label.replace('official', 'OpenAI') || settingForm.api
-                "
+              :placeholder="getApiProviderLabel(settingForm.api)"
               >
                 <template #item="{ item }">
-                  {{
-                    settingPreset.api.optionObj
-                      .find(option => option.value === item)
-                      ?.label.replace('official', 'OpenAI') || item
-                  }}
+                {{ getApiProviderLabel(item as string) }}
                 </template>
               </SingleSelect>
             </SettingCard>
@@ -505,9 +649,9 @@ import CustomInput from '@/components/CustomInput.vue'
 import SettingCard from '@/components/SettingCard.vue'
 import SettingSection from '@/components/SettingSection.vue'
 import SingleSelect from '@/components/SingleSelect.vue'
-import { localStorageKey } from '@/utils/enum'
 import { getLabel, getPlaceholder } from '@/utils/common'
 import { availableAPIs, buildInPrompt } from '@/utils/constant'
+import { localStorageKey } from '@/utils/enum'
 import { flushTelemetryQueueToProxy, getGeneralToolDefinitions, loadTelemetryQueue } from '@/utils/generalTools'
 import useSettingForm from '@/utils/settingForm'
 import { Setting_Names, SettingNames, settingPreset } from '@/utils/settingPreset'
@@ -516,11 +660,63 @@ const { t } = useI18n()
 const router = useRouter()
 const settingForm = useSettingForm()
 
+const migrateLegacy3232Endpoints = () => {
+  if (typeof window === 'undefined') return
+
+  const keysToMigrate: string[] = [
+    localStorageKey.proxy,
+    localStorageKey.mcpProxyHubUrl,
+    localStorageKey.memorixToolsEndpoint,
+    localStorageKey.memorixToolsCallEndpoint,
+    localStorageKey.qdrantResourcesToolsEndpoint,
+    localStorageKey.qdrantResourcesToolsCallEndpoint,
+    localStorageKey.docSuiteToolsEndpoint,
+    localStorageKey.docSuiteToolsCallEndpoint,
+  ]
+
+  const normalize = (raw: string): string => {
+    const trimmed = raw.trim()
+    if (!trimmed.includes(':3232')) return trimmed
+
+    try {
+      const parsed = new URL(trimmed, window.location.origin)
+      if (parsed.port === '3232') {
+        parsed.port = '3100'
+      }
+      return parsed.toString()
+    } catch {
+      return trimmed.replace(':3232', ':3100')
+    }
+  }
+
+  keysToMigrate.forEach(key => {
+    const current = localStorage.getItem(key)
+    if (!current || !current.includes(':3232')) return
+    const migrated = normalize(current)
+    if (migrated !== current) {
+      localStorage.setItem(key, migrated)
+    }
+  })
+}
+
+migrateLegacy3232Endpoints()
+
 const currentTab = ref('provider')
 const enableProxy = ref(localStorage.getItem(localStorageKey.enableProxy) === 'true')
 const proxyEndpoint = ref(localStorage.getItem(localStorageKey.proxy) || '')
 const enableAgentTelemetry = ref(localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false')
-const telemetryFlushIntervalSeconds = ref(Math.max(5, Number(localStorage.getItem(localStorageKey.telemetryFlushIntervalSeconds) || 30)))
+
+const getApiProviderLabel = (platform: string) => {
+  if (platform === 'openrouter') return 'OpenRouter'
+  if (platform === 'official') return 'OpenAI'
+  return platform
+}
+
+const resolveProviderPlatform = (platform: string) => (platform === 'openrouter' ? 'official' : platform)
+
+const telemetryFlushIntervalSeconds = ref(
+  Math.max(5, Number(localStorage.getItem(localStorageKey.telemetryFlushIntervalSeconds) || 30)),
+)
 const telemetryQueueSize = ref(loadTelemetryQueue().length)
 const telemetryFlushTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
@@ -607,26 +803,32 @@ const tabs = [
 ]
 
 const getApiInputSettings = (platform: string) => {
+  const mappedPlatform = resolveProviderPlatform(platform)
   return Object.keys(settingForm.value).filter(
     key =>
-      key.startsWith(platform) && settingPreset[key as SettingNames].type === 'input' && !key.endsWith('CustomModel'),
+      key.startsWith(mappedPlatform) &&
+      settingPreset[key as SettingNames].type === 'input' &&
+      !key.endsWith('CustomModel'),
   )
 }
 
 const getApiNumSettings = (platform: string) => {
+  const mappedPlatform = resolveProviderPlatform(platform)
   return Object.keys(settingForm.value).filter(
-    key => key.startsWith(platform) && settingPreset[key as SettingNames].type === 'inputNum',
+    key => key.startsWith(mappedPlatform) && settingPreset[key as SettingNames].type === 'inputNum',
   )
 }
 
 const getApiSelectSettings = (platform: string) => {
+  const mappedPlatform = resolveProviderPlatform(platform)
   return Object.keys(settingForm.value).filter(
-    key => key.startsWith(platform) && settingPreset[key as SettingNames].type === 'select',
+    key => key.startsWith(mappedPlatform) && settingPreset[key as SettingNames].type === 'select',
   )
 }
 
 const getCustomModelsKey = (platform: string): SettingNames | null => {
-  const key = `${platform}CustomModels` as SettingNames
+  const mappedPlatform = resolveProviderPlatform(platform)
+  const key = `${mappedPlatform}CustomModels` as SettingNames
   return settingPreset[key] ? key : null
 }
 
@@ -646,14 +848,15 @@ const addCustomModel = (platform: string) => {
 
   const key = getCustomModelsKey(platform)
   if (!key) return
+  const canonicalPlatform = resolveProviderPlatform(platform)
 
-  if (!customModelsMap.value[platform]) {
-    customModelsMap.value[platform] = []
+  if (!customModelsMap.value[canonicalPlatform]) {
+    customModelsMap.value[canonicalPlatform] = []
   }
 
-  if (!customModelsMap.value[platform].includes(model)) {
-    customModelsMap.value[platform].push(model)
-    ;(settingPreset[key] as any).saveFunc(customModelsMap.value[platform])
+  if (!customModelsMap.value[canonicalPlatform].includes(model)) {
+    customModelsMap.value[canonicalPlatform].push(model)
+    ;(settingPreset[key] as any).saveFunc(customModelsMap.value[canonicalPlatform])
     newCustomModel.value[platform] = ''
   }
 }
@@ -661,12 +864,14 @@ const addCustomModel = (platform: string) => {
 const removeCustomModel = (platform: string, model: string) => {
   const key = getCustomModelsKey(platform)
   if (!key) return
+  const canonicalPlatform = resolveProviderPlatform(platform)
 
-  customModelsMap.value[platform] = customModelsMap.value[platform].filter(m => m !== model)
-  ;(settingPreset[key] as any).saveFunc(customModelsMap.value[platform])
+  customModelsMap.value[canonicalPlatform] = (customModelsMap.value[canonicalPlatform] || []).filter(m => m !== model)
+  ;(settingPreset[key] as any).saveFunc(customModelsMap.value[canonicalPlatform])
 
   // If the removed model was selected, switch to first available
-  const selectKey = `${platform}ModelSelect` as SettingNames
+  const mappedPlatform = resolveProviderPlatform(platform)
+  const selectKey = `${mappedPlatform}ModelSelect` as SettingNames
   if (settingForm.value[selectKey] === model) {
     const options = getMergedModelOptions(platform)
     if (options.length > 0) {
@@ -676,9 +881,10 @@ const removeCustomModel = (platform: string, model: string) => {
 }
 
 const getMergedModelOptions = (platform: string) => {
-  const selectKey = `${platform}ModelSelect` as SettingNames
+  const mappedPlatform = resolveProviderPlatform(platform)
+  const selectKey = `${mappedPlatform}ModelSelect` as SettingNames
   const presetOptions = settingPreset[selectKey]?.optionList || []
-  const customModels = customModelsMap.value[platform] || []
+  const customModels = customModelsMap.value[mappedPlatform] || []
 
   return [...customModels, ...presetOptions]
 }
@@ -741,7 +947,9 @@ const addTelemetryWatch = () => {
       }
       if (value && telemetryFlushTimer.value === null) {
         telemetryFlushTimer.value = setInterval(() => {
-          flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+          flushTelemetryQueueToProxy()
+            .then(() => refreshTelemetryQueueSize())
+            .catch(() => {})
         }, telemetryFlushIntervalSeconds.value * 1000)
       }
     },
@@ -757,7 +965,9 @@ const addTelemetryWatch = () => {
       if (telemetryFlushTimer.value !== null) {
         clearInterval(telemetryFlushTimer.value)
         telemetryFlushTimer.value = setInterval(() => {
-          flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+          flushTelemetryQueueToProxy()
+            .then(() => refreshTelemetryQueueSize())
+            .catch(() => {})
         }, numeric * 1000)
       }
     },
@@ -765,7 +975,9 @@ const addTelemetryWatch = () => {
 
   if (enableAgentTelemetry.value) {
     telemetryFlushTimer.value = setInterval(() => {
-      flushTelemetryQueueToProxy().then(() => refreshTelemetryQueueSize()).catch(() => {})
+      flushTelemetryQueueToProxy()
+        .then(() => refreshTelemetryQueueSize())
+        .catch(() => {})
     }, telemetryFlushIntervalSeconds.value * 1000)
   }
 }
@@ -794,6 +1006,24 @@ const buildConfigSnapshot = () => {
       memorixToolsCallEndpoint: settingForm.value.memorixToolsCallEndpoint,
       memorixToolTimeoutMs: settingForm.value.memorixToolTimeoutMs,
       memorixMaxRetries: settingForm.value.memorixMaxRetries,
+    },
+    qdrantResources: {
+      enableQdrantResourcesTools: settingForm.value.enableQdrantResourcesTools,
+      qdrantResourcesAgentId: settingForm.value.qdrantResourcesAgentId,
+      qdrantResourcesToolsEndpoint: settingForm.value.qdrantResourcesToolsEndpoint,
+      qdrantResourcesToolsCallEndpoint: settingForm.value.qdrantResourcesToolsCallEndpoint,
+      qdrantResourcesToolTimeoutMs: settingForm.value.qdrantResourcesToolTimeoutMs,
+      qdrantResourcesMaxRetries: settingForm.value.qdrantResourcesMaxRetries,
+      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
+    },
+    docSuiteReferences: {
+      enableDocSuiteReferenceTools: settingForm.value.enableDocSuiteReferenceTools,
+      docSuiteAgentId: settingForm.value.docSuiteAgentId,
+      docSuiteToolsEndpoint: settingForm.value.docSuiteToolsEndpoint,
+      docSuiteToolsCallEndpoint: settingForm.value.docSuiteToolsCallEndpoint,
+      docSuiteToolTimeoutMs: settingForm.value.docSuiteToolTimeoutMs,
+      docSuiteMaxRetries: settingForm.value.docSuiteMaxRetries,
+      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
     },
     telemetry: {
       telemetryEnabled: settingForm.value.telemetryEnabled,
@@ -1066,6 +1296,7 @@ const isGeneralTool = (toolName: string): boolean => {
 }
 
 onBeforeMount(() => {
+  migrateLegacy3232Endpoints()
   loadPrompts()
   loadCustomModels()
   loadBuiltInPrompts()

@@ -1,16 +1,30 @@
-import { createServer } from 'node:http'
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import { join } from 'node:path'
+import process from 'node:process'
+import { URL } from 'node:url'
 
 const PORT = Number(process.env.PORT || 3100)
 const LOG_DIR = process.env.LOG_DIR || `${process.cwd()}/logs`
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*'
 const MEMORIX_DISCOVER_PATH = '/api/tools/memorix'
 const MEMORIX_CALL_PATH = '/api/tools/memorix/call'
+const QDRANT_DISCOVER_PATH = '/api/tools/qdrant'
+const QDRANT_CALL_PATH = '/api/tools/qdrant/call'
+const QDRANT_FORWARD_DISCOVER_PATH = '/servers/Qdrant_Resources/tools/list'
+const QDRANT_FORWARD_CALL_PATH = '/servers/Qdrant_Resources/tools/call'
+const DOCSUITE_DISCOVER_PATH = '/api/tools/docsuite'
+const DOCSUITE_CALL_PATH = '/api/tools/docsuite/call'
+const DOCSUITE_FORWARD_DISCOVER_PATH = '/servers/docSuite/tools/list'
+const DOCSUITE_FORWARD_CALL_PATH = '/servers/docSuite/tools/call'
 const TELEMETRY_PATH = '/api/telemetry'
 
 const providerTargets = {
   openai: 'https://api.openai.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
   groq: 'https://api.groq.com/openai/v1',
 }
 
@@ -34,6 +48,12 @@ function getRequestTarget(url) {
     const tail = pathname.replace('/api/openai/v1', '') || '/'
     const upstreamPath = tail
     return { provider: 'openai', upstreamURL: `${providerTargets.openai}${upstreamPath}${parsed.search}` }
+  }
+
+  if (pathname === '/api/openrouter/v1' || pathname.startsWith('/api/openrouter/v1/')) {
+    const tail = pathname.replace('/api/openrouter/v1', '') || '/'
+    const upstreamPath = tail
+    return { provider: 'openrouter', upstreamURL: `${providerTargets.openrouter}${upstreamPath}${parsed.search}` }
   }
 
   if (pathname === '/api/groq/v1' || pathname.startsWith('/api/groq/v1/')) {
@@ -74,9 +94,9 @@ function copyResponseHeaders(upstreamRes, res) {
 
 function createNoopLogger() {
   return {
-    write: () => {},
-    writeRaw: () => {},
-    close: () => {},
+    write: () => undefined,
+    writeRaw: () => undefined,
+    close: () => undefined,
   }
 }
 
@@ -127,8 +147,8 @@ async function handleMemorixDiscover(req, res, logger, requestId) {
   const response = await fetchWithRetry(
     targetUrl,
     {
-    method: 'GET',
-    headers: { accept: 'application/json' },
+      method: 'GET',
+      headers: { accept: 'application/json' },
     },
     config.maxRetries,
     config.timeoutMs,
@@ -214,12 +234,12 @@ async function handleMemorixCall(req, res, logger, requestId) {
   const response = await fetchWithRetry(
     targetUrl,
     {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
     },
     config.maxRetries,
     config.timeoutMs,
@@ -233,6 +253,310 @@ async function handleMemorixCall(req, res, logger, requestId) {
 
   logger.write({
     type: 'memorix.call.response',
+    requestId,
+    status: response.status,
+    toolName: payload.toolName || parsedBody.toolName || config.toolName,
+    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+  })
+
+  if (!responseText) {
+    res.end('{}')
+    return
+  }
+  res.end(responseText)
+}
+
+async function handleQdrantDiscover(req, res, logger, requestId) {
+  const requestUrl = new URL(req.url || '/', 'http://localhost')
+  const config = getQdrantProxyConfig(req.url || '/')
+  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint
+  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
+  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(JSON.stringify({ error: 'Invalid qdrant configuration: mcpProxyHubUrl points to the current proxy host' }))
+    return
+  }
+  const upstreamUrl = `${upstreamBase}${upstreamPath}`
+  const targetUrl = withProxyQuery(upstreamUrl, {
+    agentId: config.agentId,
+    memorixToolTimeoutMs: String(config.timeoutMs),
+    memorixMaxRetries: String(config.maxRetries),
+  })
+
+  logger.write({
+    type: 'qdrant.discover.start',
+    requestId,
+    upstream: targetUrl,
+    config,
+  })
+
+  const response = await fetchWithRetry(
+    targetUrl,
+    {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+
+  const responseText = await response.text()
+  res.writeHead(response.status, {
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Content-Type': 'application/json',
+  })
+  logger.write({
+    type: 'qdrant.discover.response',
+    requestId,
+    status: response.status,
+    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+  })
+
+  if (!response.ok) {
+    res.end(JSON.stringify({ error: responseText || 'qdrant discover failed', status: response.status }))
+    return
+  }
+
+  if (!responseText) {
+    res.end('[]')
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(responseText)
+    const payload = Array.isArray(parsed) ? parsed : parsed.tools || parsed.toolDescriptors || []
+    res.end(JSON.stringify(payload))
+  } catch {
+    res.end(JSON.stringify({ error: 'invalid discover response', raw: responseText.slice(0, 4096) }))
+  }
+}
+
+async function handleQdrantCall(req, res, logger, requestId) {
+  const config = getQdrantProxyConfig(req.url || '/')
+  const requestUrl = new URL(req.url || '/', 'http://localhost')
+  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint
+  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
+  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(JSON.stringify({ error: 'Invalid qdrant configuration: mcpProxyHubUrl points to the current proxy host' }))
+    return
+  }
+  const upstreamUrl = `${upstreamBase}${upstreamPath}`
+  const body = await getRequestBodyBody(req)
+  let parsedBody = {}
+  try {
+    parsedBody = body ? JSON.parse(body) : {}
+  } catch {
+    res.writeHead(400, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(JSON.stringify({ error: 'Invalid JSON payload' }))
+    return
+  }
+  const payload = {
+    ...parsedBody,
+    agentId: parsedBody.agentId || config.agentId,
+  }
+
+  logger.write({
+    type: 'qdrant.call.start',
+    requestId,
+    upstream: upstreamUrl,
+    toolName: payload.toolName || parsedBody.toolName || config.toolName || 'unknown',
+    requestIdFromClient: payload.requestId,
+  })
+
+  const targetUrl = withProxyQuery(upstreamUrl, {
+    agentId: payload.agentId,
+    memorixToolTimeoutMs: String(config.timeoutMs),
+    memorixMaxRetries: String(config.maxRetries),
+  })
+
+  const response = await fetchWithRetry(
+    targetUrl,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+
+  const responseText = await response.text()
+  res.writeHead(response.status, {
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Content-Type': 'application/json',
+  })
+
+  logger.write({
+    type: 'qdrant.call.response',
+    requestId,
+    status: response.status,
+    toolName: payload.toolName || parsedBody.toolName || config.toolName,
+    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+  })
+
+  if (!responseText) {
+    res.end('{}')
+    return
+  }
+  res.end(responseText)
+}
+
+async function handleDocSuiteDiscover(req, res, logger, requestId) {
+  const requestUrl = new URL(req.url || '/', 'http://localhost')
+  const config = getDocSuiteProxyConfig(req.url || '/')
+  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint
+  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
+  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(
+      JSON.stringify({ error: 'Invalid docsuite configuration: mcpProxyHubUrl points to the current proxy host' }),
+    )
+    return
+  }
+  const upstreamUrl = `${upstreamBase}${upstreamPath}`
+  const targetUrl = withProxyQuery(upstreamUrl, {
+    agentId: config.agentId,
+    docSuiteToolTimeoutMs: String(config.timeoutMs),
+    docSuiteMaxRetries: String(config.maxRetries),
+  })
+
+  logger.write({
+    type: 'docsuite.discover.start',
+    requestId,
+    upstream: targetUrl,
+    config,
+  })
+
+  const response = await fetchWithRetry(
+    targetUrl,
+    {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+
+  const responseText = await response.text()
+  res.writeHead(response.status, {
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Content-Type': 'application/json',
+  })
+  logger.write({
+    type: 'docsuite.discover.response',
+    requestId,
+    status: response.status,
+    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+  })
+
+  if (!response.ok) {
+    res.end(JSON.stringify({ error: responseText || 'docsuite discover failed', status: response.status }))
+    return
+  }
+
+  if (!responseText) {
+    res.end('[]')
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(responseText)
+    const payload = Array.isArray(parsed) ? parsed : parsed.tools || parsed.toolDescriptors || []
+    res.end(JSON.stringify(payload))
+  } catch {
+    res.end(JSON.stringify({ error: 'invalid discover response', raw: responseText.slice(0, 4096) }))
+  }
+}
+
+async function handleDocSuiteCall(req, res, logger, requestId) {
+  const config = getDocSuiteProxyConfig(req.url || '/')
+  const requestUrl = new URL(req.url || '/', 'http://localhost')
+  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint
+  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
+  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(
+      JSON.stringify({ error: 'Invalid docsuite configuration: mcpProxyHubUrl points to the current proxy host' }),
+    )
+    return
+  }
+  const upstreamUrl = `${upstreamBase}${upstreamPath}`
+  const body = await getRequestBodyBody(req)
+  let parsedBody = {}
+  try {
+    parsedBody = body ? JSON.parse(body) : {}
+  } catch {
+    res.writeHead(400, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(JSON.stringify({ error: 'Invalid JSON payload' }))
+    return
+  }
+  const payload = {
+    ...parsedBody,
+    agentId: parsedBody.agentId || config.agentId,
+  }
+
+  logger.write({
+    type: 'docsuite.call.start',
+    requestId,
+    upstream: upstreamUrl,
+    toolName: payload.toolName || parsedBody.toolName || config.toolName || 'unknown',
+    requestIdFromClient: payload.requestId,
+  })
+
+  const targetUrl = withProxyQuery(upstreamUrl, {
+    agentId: payload.agentId,
+    docSuiteToolTimeoutMs: String(config.timeoutMs),
+    docSuiteMaxRetries: String(config.maxRetries),
+  })
+
+  const response = await fetchWithRetry(
+    targetUrl,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+
+  const responseText = await response.text()
+  res.writeHead(response.status, {
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Content-Type': 'application/json',
+  })
+
+  logger.write({
+    type: 'docsuite.call.response',
     requestId,
     status: response.status,
     toolName: payload.toolName || parsedBody.toolName || config.toolName,
@@ -301,6 +625,104 @@ async function handleTelemetryRequest(req, res, logger, requestId) {
   res.end(JSON.stringify({ ok: true, accepted: events.length, requestId }))
 }
 
+async function handleTelemetryGet(_req, res, parsedUrl) {
+  const logDir = await resolveLogDir()
+  if (!logDir) {
+    res.writeHead(503, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(JSON.stringify({ error: 'Telemetry log directory unavailable' }))
+    return
+  }
+
+  const threadId = parsedUrl.searchParams.get('threadId') || ''
+  const requestId = parsedUrl.searchParams.get('requestId') || ''
+  const type = parsedUrl.searchParams.get('type') || ''
+  const since = parsedUrl.searchParams.get('since') || ''
+  let limit = Number.parseInt(parsedUrl.searchParams.get('limit') || '500', 10)
+  if (!Number.isFinite(limit) || limit < 1) limit = 500
+  limit = Math.min(limit, 5000)
+
+  let maxFiles = Number.parseInt(parsedUrl.searchParams.get('maxFiles') || '120', 10)
+  if (!Number.isFinite(maxFiles) || maxFiles < 1) maxFiles = 120
+  maxFiles = Math.min(maxFiles, 500)
+
+  let names
+  try {
+    names = await readdir(logDir)
+  } catch (error) {
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
+      'Content-Type': 'application/json',
+    })
+    res.end(
+      JSON.stringify({
+        error: 'Failed to read log directory',
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    )
+    return
+  }
+
+  const telemetryFiles = names.filter(n => n.endsWith('-telemetry.jsonl'))
+  const withStat = await Promise.all(
+    telemetryFiles.map(async name => {
+      const filePath = join(logDir, name)
+      try {
+        const s = await stat(filePath)
+        return { filePath, mtime: s.mtimeMs }
+      } catch {
+        return null
+      }
+    }),
+  )
+  const sorted = withStat
+    .filter(Boolean)
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, maxFiles)
+
+  const events = []
+  for (const { filePath } of sorted) {
+    let raw = ''
+    try {
+      raw = await readFile(filePath, 'utf8')
+    } catch {
+      // skip unreadable
+    }
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue
+      try {
+        const ev = JSON.parse(line)
+        if (threadId && String(ev.threadId || '') !== threadId) continue
+        if (requestId && String(ev.requestId || '') !== requestId) continue
+        if (type && !String(ev.type || '').includes(type)) continue
+        if (since) {
+          const t = ev.persistedAt || ev.ts || ev.queuedAt
+          if (!t || String(t) < since) continue
+        }
+        events.push(ev)
+      } catch {
+        // skip malformed line
+      }
+    }
+  }
+
+  events.sort((a, b) => {
+    const tb = String(b.persistedAt || b.ts || b.queuedAt || '')
+    const ta = String(a.persistedAt || a.ts || a.queuedAt || '')
+    return tb.localeCompare(ta)
+  })
+
+  const sliced = events.slice(0, limit)
+
+  res.writeHead(200, {
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
+    'Content-Type': 'application/json',
+  })
+  res.end(JSON.stringify({ ok: true, count: sliced.length, events: sliced }))
+}
+
 function createLogger(proxyUrl) {
   const stream = createWriteStream(proxyUrl, { flags: 'a' })
   return {
@@ -320,13 +742,73 @@ function parseNumeric(value, fallback) {
 function getMemorixProxyConfig(reqUrl) {
   const url = new URL(reqUrl, 'http://localhost')
   return {
-    mcpProxyHubUrl: url.searchParams.get('mcpProxyHubUrl') || process.env.MEMORIX_PROXY_HUB_URL || 'http://localhost:3100',
+    mcpProxyHubUrl:
+      url.searchParams.get('mcpProxyHubUrl') || process.env.MEMORIX_PROXY_HUB_URL || 'http://localhost:8096',
     agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
     toolEndpoint:
       url.searchParams.get('memorixToolsEndpoint') || url.searchParams.get('forwardEndpoint') || MEMORIX_DISCOVER_PATH,
     callEndpoint: url.searchParams.get('memorixToolsCallEndpoint') || MEMORIX_CALL_PATH,
     timeoutMs: parseNumeric(url.searchParams.get('memorixToolTimeoutMs'), 12000),
     maxRetries: parseNumeric(url.searchParams.get('memorixMaxRetries'), 2),
+    toolName: url.searchParams.get('toolName') || '',
+  }
+}
+
+function getQdrantProxyConfig(reqUrl) {
+  const url = new URL(reqUrl, 'http://localhost')
+  return {
+    mcpProxyHubUrl:
+      url.searchParams.get('mcpProxyHubUrl') ||
+      process.env.QDRANT_PROXY_HUB_URL ||
+      process.env.MEMORIX_PROXY_HUB_URL ||
+      'http://localhost:8096',
+    agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
+    toolEndpoint:
+      url.searchParams.get('qdrantToolsEndpoint') ||
+      url.searchParams.get('forwardEndpoint') ||
+      process.env.QDRANT_TOOLS_ENDPOINT ||
+      QDRANT_FORWARD_DISCOVER_PATH,
+    callEndpoint:
+      url.searchParams.get('qdrantToolsCallEndpoint') ||
+      url.searchParams.get('forwardEndpoint') ||
+      process.env.QDRANT_TOOLS_CALL_ENDPOINT ||
+      QDRANT_FORWARD_CALL_PATH,
+    timeoutMs: parseNumeric(
+      url.searchParams.get('qdrantToolTimeoutMs') || url.searchParams.get('memorixToolTimeoutMs'),
+      12000,
+    ),
+    maxRetries: parseNumeric(url.searchParams.get('qdrantMaxRetries') || url.searchParams.get('memorixMaxRetries'), 2),
+    toolName: url.searchParams.get('toolName') || '',
+  }
+}
+
+function getDocSuiteProxyConfig(reqUrl) {
+  const url = new URL(reqUrl, 'http://localhost')
+  return {
+    mcpProxyHubUrl:
+      url.searchParams.get('mcpProxyHubUrl') ||
+      process.env.DOCSUITE_PROXY_HUB_URL ||
+      process.env.MEMORIX_PROXY_HUB_URL ||
+      'http://localhost:8096',
+    agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
+    toolEndpoint:
+      url.searchParams.get('docSuiteToolsEndpoint') ||
+      url.searchParams.get('forwardEndpoint') ||
+      process.env.DOCSUITE_TOOLS_ENDPOINT ||
+      DOCSUITE_FORWARD_DISCOVER_PATH,
+    callEndpoint:
+      url.searchParams.get('docSuiteToolsCallEndpoint') ||
+      url.searchParams.get('forwardEndpoint') ||
+      process.env.DOCSUITE_TOOLS_CALL_ENDPOINT ||
+      DOCSUITE_FORWARD_CALL_PATH,
+    timeoutMs: parseNumeric(
+      url.searchParams.get('docSuiteToolTimeoutMs') || url.searchParams.get('memorixToolTimeoutMs'),
+      12000,
+    ),
+    maxRetries: parseNumeric(
+      url.searchParams.get('docSuiteMaxRetries') || url.searchParams.get('memorixMaxRetries'),
+      2,
+    ),
     toolName: url.searchParams.get('toolName') || '',
   }
 }
@@ -354,17 +836,17 @@ async function fetchWithRetry(url, options, retries = 1, timeoutMs = 12000) {
   let attempt = 0
   while (attempt <= retries) {
     attempt += 1
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const controller = new globalThis.AbortController()
+    const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const response = await fetch(url, {
+      const response = await globalThis.fetch(url, {
         ...options,
         signal: controller.signal,
       })
-      clearTimeout(timeout)
+      globalThis.clearTimeout(timeout)
       return response
     } catch (error) {
-      clearTimeout(timeout)
+      globalThis.clearTimeout(timeout)
       if (attempt > retries) {
         throw error
       }
@@ -408,6 +890,26 @@ async function handleRequest(req, res) {
     return
   }
 
+  const parsedUrlForTelemetry = new URL(req.url || '/', 'http://localhost')
+  const pathnameForTelemetry = parsedUrlForTelemetry.pathname || '/'
+  if (pathnameForTelemetry === TELEMETRY_PATH && req.method === 'GET') {
+    try {
+      await handleTelemetryGet(req, res, parsedUrlForTelemetry)
+    } catch (error) {
+      res.writeHead(500, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(
+        JSON.stringify({
+          error: 'Telemetry query failed',
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      )
+    }
+    return
+  }
+
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.writeHead(405, {
       'Access-Control-Allow-Origin': CORS_ORIGIN,
@@ -420,8 +922,18 @@ async function handleRequest(req, res) {
   const route = getRequestTarget(req.url || '/')
   const parsedUrl = new URL(req.url || '/', 'http://localhost')
   const pathname = parsedUrl.pathname || '/'
-  const requestId = crypto.randomUUID()
-  const routeProvider = route?.provider || 'memorix'
+  const requestId = randomUUID()
+  const routeProvider =
+    route?.provider ||
+    (pathname === MEMORIX_DISCOVER_PATH || pathname === MEMORIX_CALL_PATH
+      ? 'memorix'
+      : pathname === QDRANT_DISCOVER_PATH || pathname === QDRANT_CALL_PATH
+        ? 'qdrant'
+        : pathname === DOCSUITE_DISCOVER_PATH || pathname === DOCSUITE_CALL_PATH
+          ? 'docsuite'
+          : pathname === TELEMETRY_PATH
+            ? 'telemetry'
+            : 'proxy')
   const logDir = await resolveLogDir()
   let logger = createNoopLogger()
   if (logDir) {
@@ -469,6 +981,86 @@ async function handleRequest(req, res) {
     return
   }
 
+  if (pathname === QDRANT_DISCOVER_PATH && req.method === 'GET') {
+    try {
+      await handleQdrantDiscover(req, res, logger, requestId)
+    } catch (error) {
+      logger.write({
+        type: 'qdrant.discover.error',
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      res.writeHead(502, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(JSON.stringify({ error: 'Qdrant discover failed' }))
+    } finally {
+      logger.close()
+    }
+    return
+  }
+
+  if (pathname === QDRANT_CALL_PATH && req.method === 'POST') {
+    try {
+      await handleQdrantCall(req, res, logger, requestId)
+    } catch (error) {
+      logger.write({
+        type: 'qdrant.call.error',
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      res.writeHead(502, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(JSON.stringify({ error: 'Qdrant call failed' }))
+    } finally {
+      logger.close()
+    }
+    return
+  }
+
+  if (pathname === DOCSUITE_DISCOVER_PATH && req.method === 'GET') {
+    try {
+      await handleDocSuiteDiscover(req, res, logger, requestId)
+    } catch (error) {
+      logger.write({
+        type: 'docsuite.discover.error',
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      res.writeHead(502, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(JSON.stringify({ error: 'DocSuite discover failed' }))
+    } finally {
+      logger.close()
+    }
+    return
+  }
+
+  if (pathname === DOCSUITE_CALL_PATH && req.method === 'POST') {
+    try {
+      await handleDocSuiteCall(req, res, logger, requestId)
+    } catch (error) {
+      logger.write({
+        type: 'docsuite.call.error',
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      res.writeHead(502, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(JSON.stringify({ error: 'DocSuite call failed' }))
+    } finally {
+      logger.close()
+    }
+    return
+  }
+
   if (pathname === TELEMETRY_PATH) {
     try {
       await handleTelemetryRequest(req, res, logger, requestId)
@@ -494,7 +1086,22 @@ async function handleRequest(req, res) {
       'Access-Control-Allow-Origin': CORS_ORIGIN,
       'Content-Type': 'application/json',
     })
-    res.end(JSON.stringify({ error: 'Proxy route not found', supported: ['/api/openai/v1', '/api/groq/v1'] }))
+    res.end(
+      JSON.stringify({
+        error: 'Proxy route not found',
+        supported: [
+          '/api/openai/v1',
+          '/api/groq/v1',
+          TELEMETRY_PATH,
+          MEMORIX_DISCOVER_PATH,
+          MEMORIX_CALL_PATH,
+          QDRANT_DISCOVER_PATH,
+          QDRANT_CALL_PATH,
+          DOCSUITE_DISCOVER_PATH,
+          DOCSUITE_CALL_PATH,
+        ],
+      }),
+    )
     return
   }
 
@@ -510,7 +1117,7 @@ async function handleRequest(req, res) {
       requestStream = false
     }
 
-    const upstreamResponse = await fetch(route.upstreamURL, {
+    const upstreamResponse = await globalThis.fetch(route.upstreamURL, {
       method: req.method,
       headers: buildUpstreamHeaders(req.headers),
       body: requestBody,
@@ -544,7 +1151,7 @@ async function handleRequest(req, res) {
       return
     }
 
-    const decoder = new TextDecoder()
+    const decoder = new globalThis.TextDecoder()
     const reader = upstreamResponse.body.getReader()
     let carry = ''
     let byteCount = 0
@@ -566,9 +1173,7 @@ async function handleRequest(req, res) {
         carry = chunks.pop() || ''
 
         chunks.forEach(rawEvent => {
-          const dataLine = rawEvent
-            .split('\n')
-            .find(line => line.trim().toLowerCase().startsWith('data:'))
+          const dataLine = rawEvent.split('\n').find(line => line.trim().toLowerCase().startsWith('data:'))
 
           if (!dataLine) {
             return
@@ -613,7 +1218,7 @@ async function handleRequest(req, res) {
     })
     res.end()
   } catch (error) {
-    console.error('[proxy] Failed request', error)
+    globalThis.console.error('[proxy] Failed request', error)
     logger.write({
       type: 'error',
       requestId,
@@ -632,6 +1237,6 @@ async function handleRequest(req, res) {
 
 const server = createServer(handleRequest)
 server.listen(PORT, () => {
-  console.log(`[proxy] listening on ${PORT}`)
-  console.log(`[proxy] logs: ${LOG_DIR}`)
+  globalThis.console.log(`[proxy] listening on ${PORT}`)
+  globalThis.console.log(`[proxy] logs: ${LOG_DIR}`)
 })

@@ -8,4 +8,12 @@
   </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+import { onMounted } from 'vue'
+
+import { hydrateTelemetryQueueFromIndexedDb } from '@/utils/generalTools'
+
+onMounted(() => {
+  void hydrateTelemetryQueueFromIndexedDb()
+})
+</script>

@@ -2,6 +2,7 @@ import type { RunnableConfig } from '@langchain/core/runnables'
 import { BaseCheckpointSaver, Checkpoint, CheckpointMetadata, type CheckpointTuple } from '@langchain/langgraph'
 export type { CheckpointTuple }
 import Dexie, { Table } from 'dexie'
+import { createUUID } from '@/utils/uuid'
 
 export interface Thread {
   id: string
@@ -142,7 +143,7 @@ export class IndexedDBSaver extends BaseCheckpointSaver {
         throw new Error('thread_id is required in config.configurable')
       }
 
-      const checkpoint_id = config.configurable?.checkpoint_id || checkpoint.id || crypto.randomUUID()
+      const checkpoint_id = config.configurable?.checkpoint_id || checkpoint.id || createUUID()
 
       console.log('[IndexedDBSaver] put:', { thread_id, checkpoint_id })
 

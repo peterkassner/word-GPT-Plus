@@ -10,6 +10,7 @@ export function checkAuth(auth: Auth): boolean {
 
   switch (auth.type) {
     case 'official':
+  case 'openrouter':
       return !!auth.apiKey
     case 'azure':
       return !!auth.azureAPIKey

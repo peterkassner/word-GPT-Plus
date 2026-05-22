@@ -10,16 +10,15 @@
   />
   <div
     v-show="!showCheckpoints"
-    class="itemse-center relative flex h-full w-full flex-col justify-center bg-bg-secondary p-1"
+    class="itemse-center relative flex h-full w-full flex-col justify-center bg-bg-secondary p-1.5"
   >
-    <div class="relative flex h-full w-full flex-col gap-1 rounded-md">
+    <div class="relative flex h-full w-full flex-col gap-1.5 rounded-md">
       <!-- Header -->
-      <div class="flex justify-between rounded-sm p-1">
-        <div class="flex flex-1 items-center gap-2 text-accent">
-          <Sparkles :size="18" />
-          <span class="text-sm font-semibold text-main">Word GPT+</span>
+      <div class="flex items-center justify-between rounded-md border border-border-secondary bg-surface px-2 py-1.5">
+        <div class="flex flex-1 items-center gap-2">
+          <span class="text-sm font-semibold tracking-tight text-main">Assistant</span>
         </div>
-        <div class="flex items-center gap-1 rounded-md border border-accent/10">
+        <div class="flex items-center gap-1 rounded-md border border-border-secondary bg-bg-secondary p-0.5">
           <CustomButton
             :title="t('newChat')"
             :icon="Plus"
@@ -51,7 +50,9 @@
       </div>
 
       <!-- Quick Actions Bar -->
-      <div class="flex w-full items-center justify-center gap-2 overflow-hidden rounded-md">
+      <div
+        class="flex w-full items-center justify-center gap-2 overflow-hidden rounded-md border border-border-secondary bg-surface p-1.5"
+      >
         <CustomButton
           v-for="action in quickActions"
           :key="action.key"
@@ -82,14 +83,10 @@
       <!-- Chat Messages Container -->
       <div
         ref="messagesContainer"
-        class="flex flex-1 flex-col gap-4 overflow-y-auto rounded-md border border-border-secondary bg-surface p-2 shadow-sm"
+        class="flex flex-1 flex-col gap-4 overflow-y-auto rounded-md border border-border-secondary bg-surface p-2.5 shadow-sm"
       >
-        <div
-          v-if="history.length === 0"
-          class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center text-accent"
-        >
-          <Sparkles :size="32" />
-          <p class="font-semibold text-main">
+        <div v-if="history.length === 0" class="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+          <p class="font-semibold tracking-tight text-main">
             {{ $t('emptyTitle') }}
           </p>
           <p class="text-xs font-semibold text-secondary">
@@ -152,6 +149,76 @@
             </div>
           </div>
         </div>
+        <div
+          v-if="hasAgentActivityPanel"
+          class="rounded-md border border-border-secondary bg-bg-secondary p-2 shadow-sm"
+        >
+          <div class="mb-2 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-main">Agent Activity</span>
+              <div v-if="loading && mode === 'agent'" class="flex items-center gap-1">
+                <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:140ms]" />
+                <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:280ms]" />
+              </div>
+            </div>
+            <span class="text-[11px] text-secondary">
+              {{ runningToolCallsCount > 0 ? `${runningToolCallsCount} running` : loading ? 'thinking' : 'idle' }}
+            </span>
+          </div>
+          <div v-if="recentToolCalls.length > 0" class="flex flex-col gap-1.5">
+            <details
+              v-for="toolCall in recentToolCalls"
+              :key="toolCall.id"
+              class="rounded-sm border border-border-secondary bg-surface"
+            >
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-1.5">
+                <div class="flex min-w-0 items-center gap-2">
+                  <LoaderCircle
+                    v-if="toolCall.status === 'running'"
+                    :size="13"
+                    class="shrink-0 animate-spin text-accent"
+                  />
+                  <CheckCircle v-else :size="13" class="shrink-0 text-success" />
+                  <span class="truncate text-xs font-medium text-main">{{ toolCall.name }}</span>
+                  <span
+                    v-if="toolCall.isMemorixTool"
+                    class="rounded-sm border border-border bg-bg-secondary px-1.5 py-0.5 text-[10px] text-secondary uppercase"
+                  >
+                    memorix
+                  </span>
+                  <span
+                    v-if="toolCall.isQdrantTool"
+                    class="rounded-sm border border-border bg-bg-secondary px-1.5 py-0.5 text-[10px] text-secondary uppercase"
+                  >
+                    qdrant
+                  </span>
+                  <span
+                    v-if="toolCall.isDocSuiteTool"
+                    class="rounded-sm border border-border bg-bg-secondary px-1.5 py-0.5 text-[10px] text-secondary uppercase"
+                  >
+                    docsuite
+                  </span>
+                </div>
+                <span class="text-[11px] text-secondary">{{ toolCall.status }}</span>
+              </summary>
+              <div class="flex flex-col gap-1.5 px-2 pb-2">
+                <div v-if="toolCall.argsPreview" class="rounded-sm bg-bg px-1.5 py-1">
+                  <p class="mb-0.5 text-[10px] tracking-wide text-tertiary uppercase">Args</p>
+                  <pre class="m-0 overflow-x-auto text-[11px] leading-tight whitespace-pre-wrap text-secondary">{{
+                    toolCall.argsPreview
+                  }}</pre>
+                </div>
+                <div v-if="toolCall.resultPreview" class="rounded-sm bg-bg px-1.5 py-1">
+                  <p class="mb-0.5 text-[10px] tracking-wide text-tertiary uppercase">Result</p>
+                  <pre class="m-0 overflow-x-auto text-[11px] leading-tight whitespace-pre-wrap text-secondary">{{
+                    toolCall.resultPreview
+                  }}</pre>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
       </div>
 
       <!-- Input Area -->
@@ -159,20 +226,30 @@
         <div class="flex items-center justify-between gap-2 overflow-hidden">
           <div class="flex shrink-0 gap-1 rounded-sm border border-border bg-surface p-0.5">
             <button
-              class="cursor-po flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
+              class="group cursor-po relative flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
               :class="{ active: mode === 'ask' }"
-              title="Ask Mode"
+              :title="t('askAnything')"
               @click="mode = 'ask'"
             >
               <MessageSquare :size="14" />
+              <span
+                class="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 rounded-sm border border-border bg-bg-secondary px-2 py-1 text-[11px] leading-none whitespace-nowrap text-secondary opacity-0 shadow-sm transition-opacity duration-fast group-hover:opacity-100"
+              >
+                Ask Mode
+              </span>
             </button>
             <button
-              class="cursor-po flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
+              class="group cursor-po relative flex h-7 w-7 items-center justify-center rounded-md border-none text-secondary hover:bg-accent/30 hover:text-white! [.active]:text-accent"
               :class="{ active: mode === 'agent' }"
-              title="Agent Mode"
+              :title="t('directTheAgent')"
               @click="mode = 'agent'"
             >
               <BotMessageSquare :size="17" />
+              <span
+                class="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 rounded-sm border border-border bg-bg-secondary px-2 py-1 text-[11px] leading-none whitespace-nowrap text-secondary opacity-0 shadow-sm transition-opacity duration-fast group-hover:opacity-100"
+              >
+                Agent Mode
+              </span>
             </button>
           </div>
           <div class="flex min-w-0 flex-1 gap-1 overflow-hidden">
@@ -201,7 +278,7 @@
           <textarea
             ref="inputTextarea"
             v-model="userInput"
-            class="placeholder::text-secondary block max-h-30 flex-1 resize-none overflow-y-auto border-none bg-transparent py-2 text-xs leading-normal text-main outline-none placeholder:text-xs"
+            class="placeholder::text-secondary block min-h-[20vh] flex-1 resize-none overflow-y-auto border-none bg-transparent py-2 text-xs leading-normal text-main outline-none placeholder:text-xs"
             :placeholder="mode === 'ask' ? $t('askAnything') : $t('directTheAgent')"
             rows="1"
             @keydown.enter.exact.prevent="sendMessage"
@@ -209,20 +286,30 @@
           />
           <button
             v-if="loading"
-            class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-danger text-white"
+            class="group relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-danger text-white"
             title="Stop"
             @click="stopGeneration"
           >
             <Square :size="18" />
+            <span
+              class="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 rounded-sm border border-border bg-bg-secondary px-2 py-1 text-[11px] leading-none whitespace-nowrap text-secondary opacity-0 shadow-sm transition-opacity duration-fast group-hover:opacity-100"
+            >
+              Stop
+            </span>
           </button>
           <button
             v-else
-            class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-accent text-white disabled:cursor-not-allowed disabled:bg-accent/50"
+            class="group relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-accent text-white disabled:cursor-not-allowed disabled:bg-accent/50"
             title="Send"
             :disabled="!userInput.trim()"
             @click="sendMessage"
           >
             <Send :size="18" />
+            <span
+              class="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 rounded-sm border border-border bg-bg-secondary px-2 py-1 text-[11px] leading-none whitespace-nowrap text-secondary opacity-0 shadow-sm transition-opacity duration-fast group-hover:opacity-100"
+            >
+              Send
+            </span>
           </button>
         </div>
         <div class="flex justify-center gap-3 px-1">
@@ -252,12 +339,12 @@ import {
   FileText,
   Globe,
   History,
+  LoaderCircle,
   MessageSquare,
   Plus,
   Send,
   Settings,
   Sparkle,
-  Sparkles,
   Square,
 } from 'lucide-vue-next'
 import { v4 as uuidv4 } from 'uuid'
@@ -273,6 +360,11 @@ import SingleSelect from '@/components/SingleSelect.vue'
 import CheckPointsPage from '@/pages/checkPointsPage.vue'
 import { checkAuth } from '@/utils/common'
 import { buildInPrompt, getBuiltInPrompt } from '@/utils/constant'
+import {
+  createDocSuiteReferenceTools,
+  type DocSuiteToolRequestContext,
+  getDocSuiteToolsConfigFromStorage,
+} from '@/utils/docSuiteReferenceTools'
 import { localStorageKey } from '@/utils/enum'
 import {
   appendTelemetryEvent,
@@ -282,6 +374,8 @@ import {
 } from '@/utils/generalTools'
 import { createMemorixTools, getMemorixToolsConfigFromStorage } from '@/utils/memorixTools'
 import { message as messageUtil } from '@/utils/message'
+import { resolveProxyBase } from '@/utils/proxyResolver'
+import { createQdrantResourcesTools, getQdrantToolsConfigFromStorage } from '@/utils/qdrantResourcesTools'
 import useSettingForm from '@/utils/settingForm'
 import { settingPreset } from '@/utils/settingPreset'
 import { createWordTools, WordToolName } from '@/utils/wordTools'
@@ -360,30 +454,135 @@ function loadEnabledGeneralTools(): GeneralToolName[] {
   return [...allGeneralToolNames]
 }
 
-async function getActiveToolsWithMemorix(): Promise<ReturnType<typeof createGeneralTools>> {
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+function logToolDiscoveryFailure(provider: string, error: unknown) {
+  appendTelemetryEvent({
+    type: 'tool.discovery.failed',
+    ts: new Date().toISOString(),
+    threadId: threadId.value,
+    provider,
+    error: toErrorMessage(error),
+  })
+}
+
+async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGeneralTools>> {
   const wordTools = createWordTools(enabledWordTools.value)
   const generalTools = createGeneralTools(enabledGeneralTools.value)
+  const allTools = [...generalTools, ...wordTools]
+  const docSuiteContext = await getDocSuiteContext()
 
-  const config = getMemorixToolsConfigFromStorage({
+  const memorixConfig = getMemorixToolsConfigFromStorage({
     threadId: threadId.value || undefined,
   })
-  if (!config.enableMemorixTools) {
-    memorixToolNames.value = new Set()
-    currentMemorixAgentId.value = config.memorixAgentId || 'word-gpt-plus'
-    return [...generalTools, ...wordTools]
+  const qdrantConfig = getQdrantToolsConfigFromStorage({
+    threadId: threadId.value || undefined,
+  })
+  const docSuiteConfig = getDocSuiteToolsConfigFromStorage(docSuiteContext)
+
+  memorixToolNames.value = new Set()
+  qdrantToolNames.value = new Set()
+  docSuiteToolNames.value = new Set()
+  currentMemorixAgentId.value = memorixConfig.memorixAgentId || 'word-gpt-plus'
+  currentQdrantAgentId.value = qdrantConfig.qdrantResourcesAgentId || 'word-gpt-plus'
+  currentDocSuiteAgentId.value = docSuiteConfig.docSuiteAgentId || 'word-gpt-plus'
+
+  if (memorixConfig.enableMemorixTools) {
+    try {
+      const memorixTools = await createMemorixTools(memorixConfig)
+      memorixToolNames.value = new Set(memorixTools.map(tool => tool.name))
+      allTools.push(...memorixTools)
+    } catch (error) {
+      console.error('[Memorix] Failed to load tools', error)
+      logToolDiscoveryFailure('memorix', error)
+      messageUtil.error('Memorix tool discovery failed')
+      memorixToolNames.value = new Set()
+    }
+  }
+
+  if (qdrantConfig.enableQdrantResourcesTools) {
+    try {
+      const qdrantTools = await createQdrantResourcesTools(qdrantConfig)
+      qdrantToolNames.value = new Set(qdrantTools.map(tool => tool.name))
+      allTools.push(...qdrantTools)
+    } catch (error) {
+      console.error('[Qdrant] Failed to load tools', error)
+      logToolDiscoveryFailure('qdrant', error)
+      messageUtil.error('Qdrant tool discovery failed')
+      qdrantToolNames.value = new Set()
+    }
+  }
+
+  if (docSuiteConfig.enableDocSuiteReferenceTools) {
+    try {
+      const docSuiteTools = await createDocSuiteReferenceTools(docSuiteConfig)
+      docSuiteToolNames.value = new Set(docSuiteTools.map(tool => tool.name))
+      allTools.push(...docSuiteTools)
+    } catch (error) {
+      console.error('[DocSuite] Failed to load tools', error)
+      logToolDiscoveryFailure('docsuite', error)
+      messageUtil.error('DocSuite tool discovery failed')
+      docSuiteToolNames.value = new Set()
+    }
+  }
+
+  return allTools
+}
+
+function extractFileNameFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    return segments[segments.length - 1] || ''
+  } catch {
+    const segments = url.split('/').filter(Boolean)
+    return segments[segments.length - 1] || ''
+  }
+}
+
+async function getDocSuiteContext(): Promise<DocSuiteToolRequestContext> {
+  const base: DocSuiteToolRequestContext = {
+    threadId: threadId.value || undefined,
   }
 
   try {
-    currentMemorixAgentId.value = config.memorixAgentId || 'word-gpt-plus'
-    const memorixTools = await createMemorixTools(config)
-    memorixToolNames.value = new Set(memorixTools.map(tool => tool.name))
-    return [...generalTools, ...wordTools, ...memorixTools]
-  } catch (error) {
-    console.error('[Memorix] Failed to load tools', error)
-    messageUtil.error('Memorix tool discovery failed')
-    memorixToolNames.value = new Set()
-    return [...generalTools, ...wordTools]
+    if (typeof Office !== 'undefined') {
+      const activeDocumentUrl = (Office.context?.document?.url || '').trim()
+      if (activeDocumentUrl) {
+        base.activeDocumentUrl = activeDocumentUrl
+        const fileName = extractFileNameFromUrl(activeDocumentUrl)
+        if (fileName) {
+          base.activeDocumentName = fileName
+        }
+      }
+    }
+  } catch {
+    // ignore context URL errors
   }
+
+  try {
+    const activeDocumentTitle = await Word.run(async context => {
+      const props = context.document.properties
+      props.load('title')
+      await context.sync()
+      return (props.title || '').trim()
+    })
+    if (activeDocumentTitle) {
+      base.activeDocumentTitle = activeDocumentTitle
+    }
+  } catch {
+    // ignore property load errors
+  }
+
+  return base
 }
 
 function loadSavedPrompts() {
@@ -429,6 +628,24 @@ const showCheckpoints = ref(false)
 const saver = new IndexedDBSaver()
 const currentCheckpointId = ref<string>('')
 
+type AgentToolCallStatus = 'running' | 'completed' | 'failed'
+interface AgentToolCallUiItem {
+  id: string
+  name: string
+  status: AgentToolCallStatus
+  argsPreview: string
+  resultPreview: string
+  isMemorixTool: boolean
+  isQdrantTool: boolean
+  isDocSuiteTool: boolean
+}
+const agentToolCalls = ref<AgentToolCallUiItem[]>([])
+const recentToolCalls = computed(() => agentToolCalls.value.slice(-6))
+const runningToolCallsCount = computed(() => agentToolCalls.value.filter(item => item.status === 'running').length)
+const hasAgentActivityPanel = computed(
+  () => mode.value === 'agent' && (loading.value || agentToolCalls.value.length > 0),
+)
+
 // Settings
 const useWordFormatting = useStorage(localStorageKey.useWordFormatting, true)
 const useSelectedText = useStorage(localStorageKey.useSelectedText, true)
@@ -437,7 +654,11 @@ const insertType = ref<insertTypes>('replace')
 const errorIssue = ref<boolean | string | null>(false)
 const telemetryEnabled = ref(localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false')
 const memorixToolNames = ref<Set<string>>(new Set())
+const qdrantToolNames = ref<Set<string>>(new Set())
+const docSuiteToolNames = ref<Set<string>>(new Set())
 const currentMemorixAgentId = ref('word-gpt-plus')
+const currentQdrantAgentId = ref('word-gpt-plus')
+const currentDocSuiteAgentId = ref('word-gpt-plus')
 
 const enqueueTelemetryEvent = (event: Record<string, unknown>) => {
   if (!telemetryEnabled.value) return
@@ -472,9 +693,155 @@ const summarizeTelemetryPayload = (payload: unknown, maxLength = 1200): string =
   }
 }
 
+const migrateLegacy3232Endpoints = () => {
+  if (typeof window === 'undefined') return
+
+  const keysToMigrate: string[] = [
+    localStorageKey.proxy,
+    localStorageKey.mcpProxyHubUrl,
+    localStorageKey.memorixToolsEndpoint,
+    localStorageKey.memorixToolsCallEndpoint,
+    localStorageKey.qdrantResourcesToolsEndpoint,
+    localStorageKey.qdrantResourcesToolsCallEndpoint,
+    localStorageKey.docSuiteToolsEndpoint,
+    localStorageKey.docSuiteToolsCallEndpoint,
+  ]
+
+  const normalize = (raw: string): string => {
+    const trimmed = raw.trim()
+    if (!trimmed.includes(':3232')) return trimmed
+
+    try {
+      const parsed = new URL(trimmed, window.location.origin)
+      if (parsed.port === '3232') {
+        parsed.port = '3100'
+      }
+      return parsed.toString()
+    } catch {
+      return trimmed.replace(':3232', ':3100')
+    }
+  }
+
+  keysToMigrate.forEach(key => {
+    const current = localStorage.getItem(key)
+    if (!current || !current.includes(':3232')) return
+    const migrated = normalize(current)
+    if (migrated !== current) {
+      localStorage.setItem(key, migrated)
+    }
+  })
+}
+
+interface SelectionSnapshot {
+  text: string
+  style?: string
+  styleBuiltIn?: string
+  fontName?: string
+  fontSize?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: string
+  color?: string
+}
+
+async function getSelectionSnapshot(): Promise<SelectionSnapshot> {
+  return Word.run(async context => {
+    const range = context.document.getSelection()
+    range.load([
+      'text',
+      'style',
+      'styleBuiltIn',
+      'font/name',
+      'font/size',
+      'font/bold',
+      'font/italic',
+      'font/underline',
+      'font/color',
+    ])
+    await context.sync()
+    return {
+      text: range.text || '',
+      style: range.style || undefined,
+      styleBuiltIn: (range.styleBuiltIn as string) || undefined,
+      fontName: range.font.name || undefined,
+      fontSize: typeof range.font.size === 'number' ? range.font.size : undefined,
+      bold: typeof range.font.bold === 'boolean' ? range.font.bold : undefined,
+      italic: typeof range.font.italic === 'boolean' ? range.font.italic : undefined,
+      underline: range.font.underline || undefined,
+      color: range.font.color || undefined,
+    }
+  })
+}
+
+function buildSelectionStyleContext(snapshot: SelectionSnapshot): string {
+  const parts = [
+    snapshot.styleBuiltIn ? `styleBuiltIn=${snapshot.styleBuiltIn}` : null,
+    snapshot.style ? `style=${snapshot.style}` : null,
+    snapshot.fontName ? `fontName=${snapshot.fontName}` : null,
+    typeof snapshot.fontSize === 'number' ? `fontSize=${snapshot.fontSize}` : null,
+    typeof snapshot.bold === 'boolean' ? `bold=${snapshot.bold}` : null,
+    typeof snapshot.italic === 'boolean' ? `italic=${snapshot.italic}` : null,
+    snapshot.underline ? `underline=${snapshot.underline}` : null,
+    snapshot.color ? `color=${snapshot.color}` : null,
+  ].filter(Boolean)
+
+  return parts.length > 0 ? parts.join(', ') : 'unavailable'
+}
+
+const resetAgentToolCalls = () => {
+  agentToolCalls.value = []
+}
+
+const addAgentToolCall = (
+  toolName: string,
+  args: unknown,
+  isMemorixTool: boolean,
+  isQdrantTool: boolean,
+  isDocSuiteTool: boolean,
+) => {
+  agentToolCalls.value.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: toolName,
+    status: 'running',
+    argsPreview: summarizeTelemetryPayload(args, 800),
+    resultPreview: '',
+    isMemorixTool,
+    isQdrantTool,
+    isDocSuiteTool,
+  })
+}
+
+const completeAgentToolCall = (toolName: string, result: string, status: AgentToolCallStatus = 'completed') => {
+  const index = [...agentToolCalls.value]
+    .reverse()
+    .findIndex(item => item.name === toolName && item.status === 'running')
+  if (index === -1) return
+
+  const actualIndex = agentToolCalls.value.length - 1 - index
+  agentToolCalls.value[actualIndex] = {
+    ...agentToolCalls.value[actualIndex],
+    status,
+    resultPreview: summarizeTelemetryText(result || '', 1000),
+  }
+}
+
+const failActiveToolCalls = (message = 'Tool call did not finish') => {
+  agentToolCalls.value = agentToolCalls.value.map(item =>
+    item.status === 'running'
+      ? {
+          ...item,
+          status: 'failed',
+          resultPreview: summarizeTelemetryText(message, 500),
+        }
+      : item,
+  )
+}
+
 const getProxyConfig = () => {
   const enabled = localStorage.getItem(localStorageKey.enableProxy) === 'true'
-  const proxyUrl = localStorage.getItem(localStorageKey.proxy)?.trim().replace(/\/$/, '')
+  const rawProxyUrl = localStorage.getItem(localStorageKey.proxy)?.trim()
+  if (!rawProxyUrl) return undefined
+  const proxyUrl = resolveProxyBase(rawProxyUrl)
 
   if (!enabled || !proxyUrl) {
     return undefined
@@ -519,11 +886,94 @@ const getCustomModels = (key: string, oldKey: string): string[] => {
   return []
 }
 
+const currentModelProvider = computed(() =>
+  settingForm.value.api === 'openrouter' ? 'official' : settingForm.value.api,
+)
+const currentModelSourceProvider = computed(() => settingForm.value.api)
+const remoteModelOptions = ref<Record<string, string[]>>({})
+
+const parseModelResponse = (payload: any): string[] => {
+  if (Array.isArray(payload)) {
+    return payload
+      .map(model => (typeof model === 'string' ? model.trim() : model?.id || model?.name || ''))
+      .filter(Boolean)
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data
+      .map((model: any) => (typeof model === 'string' ? model.trim() : model?.id || model?.name || ''))
+      .filter(Boolean)
+  }
+
+  if (Array.isArray(payload?.models)) {
+    return payload.models
+      .map((model: any) => (typeof model === 'string' ? model.trim() : model?.id || model?.name || ''))
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+const resolveModelEndpoint = (apiProvider: 'official' | 'openrouter') => {
+  const proxyEnabled = localStorage.getItem(localStorageKey.enableProxy) === 'true'
+  const proxyUrl = localStorage.getItem(localStorageKey.proxy)?.trim()
+  if (proxyEnabled && proxyUrl) {
+    const base = resolveProxyBase(proxyUrl)
+    return `${base}${apiProvider === 'openrouter' ? '/api/openrouter/v1' : '/api/openai/v1'}/models`
+  }
+
+  if (apiProvider === 'openrouter') {
+    return `${(settingForm.value.officialBasePath || 'https://openrouter.ai/api/v1').replace(/\/+$/, '')}/models`
+  }
+
+  return `${(settingForm.value.officialBasePath || 'https://api.openai.com/v1').replace(/\/+$/, '')}/models`
+}
+
+let modelAbortController: AbortController | null = null
+const fetchModelList = async (apiProvider: 'official' | 'openrouter') => {
+  const cacheKey = apiProvider
+  const apiKey = (settingForm.value.officialAPIKey || '').trim()
+  if (!apiKey) {
+    remoteModelOptions.value[cacheKey] = []
+    return
+  }
+
+  if (modelAbortController) {
+    modelAbortController.abort()
+  }
+
+  const controller = new AbortController()
+  modelAbortController = controller
+
+  try {
+    const response = await fetch(resolveModelEndpoint(apiProvider), {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      console.warn(`[model-poll] Failed to load ${apiProvider} models`, response.status)
+      remoteModelOptions.value[cacheKey] = []
+      return
+    }
+
+    const payload = await response.json()
+    const models = parseModelResponse(payload)
+    remoteModelOptions.value[cacheKey] = [...new Set(models)]
+  } catch (error: any) {
+    if (error?.name === 'AbortError') return
+    console.error('[model-poll] Model fetch failed', error)
+    remoteModelOptions.value[cacheKey] = []
+  }
+}
+
 const currentModelOptions = computed(() => {
   let presetOptions: string[] = []
   let customModels: string[] = []
 
-  switch (settingForm.value.api) {
+  switch (currentModelProvider.value) {
     case 'official':
       presetOptions = settingPreset.officialModelSelect.optionList || []
       customModels = getCustomModels('customModels', 'customModel')
@@ -546,12 +996,22 @@ const currentModelOptions = computed(() => {
       return []
   }
 
-  return [...presetOptions, ...customModels]
+  const remoteOptions = remoteModelOptions.value[currentModelSourceProvider.value] || []
+  const finalOptions = remoteOptions.length > 0 ? remoteOptions : presetOptions
+  return [...new Set([...customModels, ...finalOptions])]
 })
+
+const syncCurrentModelSelection = async () => {
+  const options = currentModelOptions.value
+  if (!options.length) return
+  if (!options.includes(currentModelSelect.value)) {
+    currentModelSelect.value = options[0]
+  }
+}
 
 const currentModelSelect = computed({
   get() {
-    switch (settingForm.value.api) {
+    switch (currentModelProvider.value) {
       case 'official':
         return settingForm.value.officialModelSelect
       case 'gemini':
@@ -567,7 +1027,7 @@ const currentModelSelect = computed({
     }
   },
   set(value) {
-    switch (settingForm.value.api) {
+    switch (currentModelProvider.value) {
       case 'official':
         settingForm.value.officialModelSelect = value
         localStorage.setItem(localStorageKey.model, value)
@@ -588,9 +1048,46 @@ const currentModelSelect = computed({
         settingForm.value.azureDeploymentName = value
         localStorage.setItem(localStorageKey.azureDeploymentName, value)
         break
+      default:
+        break
     }
   },
 })
+
+watch(
+  () => currentModelSourceProvider.value,
+  async provider => {
+    if (provider === 'official' || provider === 'openrouter') {
+      await fetchModelList(provider)
+    }
+    await syncCurrentModelSelection()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => settingForm.value.officialAPIKey,
+  async () => {
+    const provider = currentModelSourceProvider.value
+    if (provider === 'official' || provider === 'openrouter') {
+      await fetchModelList(provider)
+    }
+    await syncCurrentModelSelection()
+  },
+)
+
+watch(
+  () => settingForm.value.officialBasePath,
+  async () => {
+    const provider = currentModelSourceProvider.value
+    if (provider === 'official' || provider === 'openrouter') {
+      await fetchModelList(provider)
+    }
+    await syncCurrentModelSelection()
+  },
+)
+
+watch(currentModelOptions, syncCurrentModelSelection)
 
 function settings() {
   // FIXME: 使用路由方式会改变当前的threadID,进而重置页面
@@ -607,6 +1104,7 @@ function startNewChat() {
   }
   userInput.value = ''
   history.value = []
+  resetAgentToolCalls()
   threadId.value = uuidv4()
   customSystemPrompt.value = ''
   selectedPromptId.value = ''
@@ -618,13 +1116,19 @@ function stopGeneration() {
     abortController.value.abort()
     abortController.value = null
   }
+  if (mode.value === 'agent') {
+    failActiveToolCalls('Stopped by user')
+  }
   loading.value = false
 }
 
 function adjustTextareaHeight() {
   if (inputTextarea.value) {
+    const minHeight = Math.max(96, Math.round(window.innerHeight * 0.2))
+    const maxHeight = Math.max(minHeight + 40, Math.round(window.innerHeight * 0.5))
     inputTextarea.value.style.height = 'auto'
-    inputTextarea.value.style.height = Math.min(inputTextarea.value.scrollHeight, 120) + 'px'
+    const nextHeight = Math.min(Math.max(inputTextarea.value.scrollHeight, minHeight), maxHeight)
+    inputTextarea.value.style.height = `${nextHeight}px`
   }
 }
 
@@ -644,19 +1148,18 @@ async function sendMessage() {
   adjustTextareaHeight()
 
   // Get selected text from Word
-  let selectedText = ''
+  let selectionSnapshot: SelectionSnapshot | null = null
   if (useSelectedText.value) {
-    selectedText = await Word.run(async ctx => {
-      const range = ctx.document.getSelection()
-      range.load('text')
-      await ctx.sync()
-      return range.text
-    })
+    selectionSnapshot = await getSelectionSnapshot()
   }
 
   // Add user message
+  const selectedText = selectionSnapshot?.text || ''
+  const selectedStyleContext = selectionSnapshot ? buildSelectionStyleContext(selectionSnapshot) : ''
   const fullMessage = new HumanMessage(
-    selectedText ? `${userMessage}\n\n[Selected text: "${selectedText}"]` : userMessage,
+    selectedText
+      ? `${userMessage}\n\n[Selected text: "${selectedText}"]\n[Selected text style context: ${selectedStyleContext}]`
+      : userMessage,
   )
 
   scrollToBottom()
@@ -669,10 +1172,32 @@ async function sendMessage() {
   } catch (error: any) {
     if (error.name === 'AbortError') {
       messageUtil.info(t('generationStop'))
+      if (mode.value === 'agent') {
+        failActiveToolCalls('Stopped by user')
+      }
+      if (mode.value !== 'agent' && telemetryEnabled.value) {
+        enqueueTelemetryEvent({
+          type: 'chat.request.aborted',
+          threadId: threadId.value,
+          error: error?.message || String(error),
+        })
+        flushTelemetryQueueToProxy().catch(() => {})
+      }
     } else {
       console.error(error)
       messageUtil.error(t('failedToResponse'))
       history.value.pop()
+      if (mode.value === 'agent') {
+        failActiveToolCalls(error?.message || 'Agent request failed')
+      }
+      if (mode.value !== 'agent' && telemetryEnabled.value) {
+        enqueueTelemetryEvent({
+          type: 'chat.request.failed',
+          threadId: threadId.value,
+          error: error?.message || String(error),
+        })
+        flushTelemetryQueueToProxy().catch(() => {})
+      }
     }
   } finally {
     loading.value = false
@@ -714,6 +1239,9 @@ async function applyQuickAction(actionKey: keyof typeof buildInPrompt) {
   } catch (error: any) {
     if (error.name === 'AbortError') {
       messageUtil.info(t('generationStop'))
+      if (mode.value === 'agent') {
+        failActiveToolCalls('Stopped by user')
+      }
       enqueueTelemetryEvent({
         type: 'agent.request.aborted',
         error: error?.message || String(error),
@@ -721,6 +1249,9 @@ async function applyQuickAction(actionKey: keyof typeof buildInPrompt) {
     } else {
       console.error(error)
       messageUtil.error(t('failedToProcessAction'))
+      if (mode.value === 'agent') {
+        failActiveToolCalls(error?.message || 'Agent quick action failed')
+      }
       enqueueTelemetryEvent({
         type: 'agent.request.failed',
         error: error?.message || String(error),
@@ -779,6 +1310,17 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       provider,
       model: currentModelSelect.value,
     })
+  } else if (telemetryEnabled.value) {
+    enqueueTelemetryEvent({
+      type: 'chat.turn.input',
+      mode: 'chat',
+      threadId: threadId.value,
+      userInputLength: userInputText.length,
+      userInputPreview: summarizeTelemetryText(userInputText, 1600),
+      selectedPromptId: selectedPromptId.value || null,
+      provider,
+      model: currentModelSelect.value,
+    })
   }
 
   // Add user message to history
@@ -787,19 +1329,21 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
   // Prepare messages for LLM (always include system message first, followed by all history)
   const finalMessages = [defaultSystemMessage, ...history.value]
   // Build provider configuration
-  const providerConfigs: Record<string, any> = {
-    official: {
-      provider: 'official',
-      config: {
-        apiKey: settings.officialAPIKey,
-        baseURL: settings.officialBasePath,
-        dangerouslyAllowBrowser: true,
-      },
-      proxy: getProxyConfig(),
-      maxTokens: settings.officialMaxTokens,
-      temperature: settings.officialTemperature,
-      model: settings.officialModelSelect,
+  const officialProviderConfig = {
+    provider: 'official',
+    config: {
+      apiKey: settings.officialAPIKey,
+      baseURL: settings.officialBasePath,
+      dangerouslyAllowBrowser: true,
     },
+    proxy: getProxyConfig(),
+    maxTokens: settings.officialMaxTokens,
+    temperature: settings.officialTemperature,
+    model: settings.officialModelSelect,
+  }
+  const providerConfigs: Record<string, any> = {
+    official: officialProviderConfig,
+    openrouter: { ...officialProviderConfig, provider: 'openrouter' },
     groq: {
       provider: 'groq',
       groqAPIKey: settings.groqAPIKey,
@@ -842,7 +1386,8 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
 
   // Use agent mode with tools if enabled
   if (isAgentMode) {
-    const tools = await getActiveToolsWithMemorix()
+    resetAgentToolCalls()
+    const tools = await getActiveToolsWithProviders()
 
     await getAgentResponse({
       ...currentConfig,
@@ -860,37 +1405,39 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         scrollToBottom()
       },
       onToolCall: (toolName: string, _args: any) => {
-        // Show tool call in UI
-        const lastIndex = history.value.length - 1
-        const currentContent = getMessageText(history.value[lastIndex])
-        history.value[lastIndex] = new AIMessage(currentContent + `\n\n🔧 Calling tool: ${toolName}...`)
         const isMemorixTool = memorixToolNames.value.has(toolName)
+        const isQdrantTool = qdrantToolNames.value.has(toolName)
+        const isDocSuiteTool = docSuiteToolNames.value.has(toolName)
+        addAgentToolCall(toolName, _args, isMemorixTool, isQdrantTool, isDocSuiteTool)
         enqueueTelemetryEvent({
           type: 'agent.tool.call',
           toolName,
           toolArgsPreview: summarizeTelemetryPayload(_args),
           isMemorixTool,
+          isQdrantTool,
+          isDocSuiteTool,
           memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+          qdrantAgentId: isQdrantTool ? currentQdrantAgentId.value : undefined,
+          docSuiteAgentId: isDocSuiteTool ? currentDocSuiteAgentId.value : undefined,
         })
         scrollToBottom()
       },
       onToolResult: (toolName: string, _result: string) => {
-        // Update with tool result
-        const lastIndex = history.value.length - 1
-        const currentContent = getMessageText(history.value[lastIndex])
-        const updatedContent = currentContent.replace(
-          `🔧 Calling tool: ${toolName}...`,
-          `✅ Tool ${toolName} completed`,
-        )
-        history.value[lastIndex] = new AIMessage(updatedContent)
+        completeAgentToolCall(toolName, _result, 'completed')
         const isMemorixTool = memorixToolNames.value.has(toolName)
+        const isQdrantTool = qdrantToolNames.value.has(toolName)
+        const isDocSuiteTool = docSuiteToolNames.value.has(toolName)
         enqueueTelemetryEvent({
           type: 'agent.tool.result',
           toolName,
           toolResultLength: _result?.length || 0,
           toolResultPreview: summarizeTelemetryText(_result || '', 1600),
           isMemorixTool,
+          isQdrantTool,
+          isDocSuiteTool,
           memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+          qdrantAgentId: isQdrantTool ? currentQdrantAgentId.value : undefined,
+          docSuiteAgentId: isDocSuiteTool ? currentDocSuiteAgentId.value : undefined,
         })
         scrollToBottom()
       },
@@ -904,6 +1451,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
           ...event.data,
         })
         if (event.type === 'agent.turn.complete') {
+          failActiveToolCalls('No tool result returned')
           const lastMessage = history.value[history.value.length - 1]
           const outputText = lastMessage ? getMessageText(lastMessage) : ''
           enqueueTelemetryEvent({
@@ -916,6 +1464,9 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
           })
         }
         if (event.type === 'agent.turn.complete' || event.type === 'agent.error') {
+          if (event.type === 'agent.error') {
+            failActiveToolCalls('Agent run failed')
+          }
           setTimeout(() => {
             flushTelemetryQueue().catch(() => {
               console.error('[Telemetry] flush failed')
@@ -938,9 +1489,38 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         scrollToBottom()
       },
     })
+    if (telemetryEnabled.value && !errorIssue.value) {
+      const lastMessage = history.value[history.value.length - 1]
+      const outputText = lastMessage ? getMessageText(lastMessage) : ''
+      enqueueTelemetryEvent({
+        type: 'chat.turn.complete',
+        mode: 'chat',
+        threadId: threadId.value,
+        provider,
+        model: currentModelSelect.value,
+        outputLength: outputText.length,
+        outputPreview: summarizeTelemetryText(outputText, 2000),
+      })
+      flushTelemetryQueue().catch(() => {
+        console.error('[Telemetry] flush failed')
+      })
+    }
   }
 
   if (errorIssue.value) {
+    if (!isAgentMode && telemetryEnabled.value) {
+      enqueueTelemetryEvent({
+        type: 'chat.turn.failed',
+        mode: 'chat',
+        threadId: threadId.value,
+        provider,
+        model: currentModelSelect.value,
+        issue: typeof errorIssue.value === 'string' ? errorIssue.value : 'unknown',
+      })
+      flushTelemetryQueue().catch(() => {
+        console.error('[Telemetry] flush failed')
+      })
+    }
     if (typeof errorIssue.value === 'string') {
       messageUtil.error(t(errorIssue.value))
     } else {
@@ -1137,6 +1717,7 @@ async function handleSelectThread(newThreadId: string) {
 }
 
 onBeforeMount(() => {
+  migrateLegacy3232Endpoints()
   addWatch()
   initData()
   loadSavedPrompts()

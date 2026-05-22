@@ -1,7 +1,7 @@
 <template>
   <button
     :disabled="disabled"
-    class="group flex min-w-fit cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all duration-fast ease-apple not-disabled:hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+    class="group relative flex min-w-fit cursor-pointer items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all duration-fast ease-apple not-disabled:hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
     :class="classVar"
     :title="title || undefined"
     :data-active="active"
@@ -20,6 +20,12 @@
       >
     </slot>
     <slot name="extra"> </slot>
+    <span
+      v-if="!text && title"
+      class="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 rounded-sm border border-border bg-bg-secondary px-2 py-1 text-[11px] leading-none whitespace-nowrap text-secondary opacity-0 shadow-sm transition-opacity duration-fast group-hover:opacity-100 group-focus-visible:opacity-100"
+    >
+      {{ title }}
+    </span>
   </button>
 </template>
 

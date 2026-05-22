@@ -29,6 +29,17 @@ export interface OpenAIOptions extends BaseChatCompletionOptions {
   proxy?: ProxyOptions
 }
 
+export interface OpenRouterOptions extends BaseChatCompletionOptions {
+  provider: 'openrouter'
+  model?: string
+  config: {
+    apiKey: string
+    baseURL?: string
+    dangerouslyAllowBrowser?: boolean
+  }
+  proxy?: ProxyOptions
+}
+
 export interface OllamaOptions extends BaseChatCompletionOptions {
   provider: 'ollama'
   ollamaModel: string
@@ -56,9 +67,9 @@ export interface AzureOptions extends BaseChatCompletionOptions {
   azureAPIVersion?: string
 }
 
-export type ProviderOptions = OpenAIOptions | OllamaOptions | GroqOptions | GeminiOptions | AzureOptions
+export type ProviderOptions = OpenAIOptions | OpenRouterOptions | OllamaOptions | GroqOptions | GeminiOptions | AzureOptions
 
-type supportedProviders = 'official' | 'ollama' | 'groq' | 'gemini' | 'azure'
+type supportedProviders = 'official' | 'openrouter' | 'ollama' | 'groq' | 'gemini' | 'azure'
 // Agent options with tools support
 export interface AgentOptions extends BaseChatCompletionOptions {
   provider: supportedProviders
@@ -86,7 +97,7 @@ export interface AgentOptions extends BaseChatCompletionOptions {
   azureDeploymentName?: string
   azureAPIVersion?: string
   onAgentEvent?: (event: {
-    type: 'agent.turn.start' | 'agent.turn.complete' | 'agent.step' | 'agent.tool.call' | 'agent.tool.result' | 'agent.error'
+    type: 'agent.turn.start' | 'agent.turn.complete' | 'agent.step' | 'agent.error'
     requestId: string
     turnId: string
     ts: string

@@ -3,6 +3,7 @@ import { i18n } from '@/i18n'
 import { forceNumber, optionLists } from './common'
 import { availableModels, availableModelsForGemini, availableModelsForGroq, availableModelsForOllama } from './constant'
 import { localStorageKey } from './enum'
+import { resolveProxyBase } from './proxyResolver'
 
 type componentType = 'input' | 'select' | 'inputNum'
 
@@ -61,6 +62,18 @@ export const Setting_Names = [
   'memorixToolsCallEndpoint',
   'memorixToolTimeoutMs',
   'memorixMaxRetries',
+  'enableQdrantResourcesTools',
+  'qdrantResourcesAgentId',
+  'qdrantResourcesToolsEndpoint',
+  'qdrantResourcesToolsCallEndpoint',
+  'qdrantResourcesToolTimeoutMs',
+  'qdrantResourcesMaxRetries',
+  'enableDocSuiteReferenceTools',
+  'docSuiteAgentId',
+  'docSuiteToolsEndpoint',
+  'docSuiteToolsCallEndpoint',
+  'docSuiteToolTimeoutMs',
+  'docSuiteMaxRetries',
   'telemetryEnabled',
   'telemetryFlushIntervalSeconds',
   'telemetryMaxQueueSize',
@@ -135,6 +148,32 @@ const customModelsetting = (saveKey: keyOfLocalStorageKey, oldKey: keyOfLocalSto
   saveFunc: (value: string[]) => saveCustomModels(localStorageKey[saveKey], value),
 })
 
+const LEGACY_MCP_PROXY_HUB_URLS = new Set([
+  'http://localhost:3100',
+  'https://localhost:3100',
+  'http://127.0.0.1:3100',
+  'https://127.0.0.1:3100',
+  'http://127.0.0.1:9999',
+  'https://127.0.0.1:9999',
+  '127.0.0.1:9999',
+  'localhost:9999',
+  'localhost:3100',
+  '127.0.0.1:3100',
+])
+
+const getMcpProxyHubUrl = () => {
+  const defaultValue = resolveProxyBase('http://127.0.0.1:8096')
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return defaultValue
+  const saved = localStorage.getItem(localStorageKey.mcpProxyHubUrl)?.trim()
+  if (!saved) return defaultValue
+  const normalizedSaved = saved.replace(/\/+$/, '')
+  if (LEGACY_MCP_PROXY_HUB_URLS.has(normalizedSaved)) {
+    localStorage.setItem(localStorageKey.mcpProxyHubUrl, defaultValue)
+    return defaultValue
+  }
+  return saved
+}
+
 export const settingPreset = {
   api: {
     ...inputSetting('official'),
@@ -174,12 +213,40 @@ export const settingPreset = {
     getFunc: () => localStorage.getItem(localStorageKey.enableMemorixTools) === 'true',
     saveFunc: value => localStorage.setItem(localStorageKey.enableMemorixTools, String(value)),
   },
-  mcpProxyHubUrl: inputSetting('http://localhost:3100', 'mcpProxyHubUrl'),
+  mcpProxyHubUrl: {
+    type: 'input',
+    defaultValue: resolveProxyBase('http://127.0.0.1:8096'),
+    saveKey: 'mcpProxyHubUrl',
+    getFunc: () => getMcpProxyHubUrl(),
+    saveFunc: (value: string) => localStorage.setItem(localStorageKey.mcpProxyHubUrl, String(value)),
+  },
   memorixAgentId: inputSetting('word-gpt-plus', 'memorixAgentId'),
   memorixToolsEndpoint: inputSetting('/api/tools/memorix', 'memorixToolsEndpoint'),
   memorixToolsCallEndpoint: inputSetting('/api/tools/memorix/call', 'memorixToolsCallEndpoint'),
   memorixToolTimeoutMs: inputNumSetting(12000, 'memorixToolTimeoutMs', 'maxTokens'),
   memorixMaxRetries: inputNumSetting(2, 'memorixMaxRetries', 'maxTokens'),
+  enableQdrantResourcesTools: {
+    defaultValue: false,
+    saveKey: 'enableQdrantResourcesTools',
+    getFunc: () => localStorage.getItem(localStorageKey.enableQdrantResourcesTools) === 'true',
+    saveFunc: value => localStorage.setItem(localStorageKey.enableQdrantResourcesTools, String(value)),
+  },
+  qdrantResourcesAgentId: inputSetting('word-gpt-plus', 'qdrantResourcesAgentId'),
+  qdrantResourcesToolsEndpoint: inputSetting('/api/tools/qdrant', 'qdrantResourcesToolsEndpoint'),
+  qdrantResourcesToolsCallEndpoint: inputSetting('/api/tools/qdrant/call', 'qdrantResourcesToolsCallEndpoint'),
+  qdrantResourcesToolTimeoutMs: inputNumSetting(12000, 'qdrantResourcesToolTimeoutMs', 'maxTokens'),
+  qdrantResourcesMaxRetries: inputNumSetting(2, 'qdrantResourcesMaxRetries', 'maxTokens'),
+  enableDocSuiteReferenceTools: {
+    defaultValue: false,
+    saveKey: 'enableDocSuiteReferenceTools',
+    getFunc: () => localStorage.getItem(localStorageKey.enableDocSuiteReferenceTools) === 'true',
+    saveFunc: value => localStorage.setItem(localStorageKey.enableDocSuiteReferenceTools, String(value)),
+  },
+  docSuiteAgentId: inputSetting('word-gpt-plus', 'docSuiteAgentId'),
+  docSuiteToolsEndpoint: inputSetting('/api/tools/docsuite', 'docSuiteToolsEndpoint'),
+  docSuiteToolsCallEndpoint: inputSetting('/api/tools/docsuite/call', 'docSuiteToolsCallEndpoint'),
+  docSuiteToolTimeoutMs: inputNumSetting(12000, 'docSuiteToolTimeoutMs', 'maxTokens'),
+  docSuiteMaxRetries: inputNumSetting(2, 'docSuiteMaxRetries', 'maxTokens'),
   telemetryEnabled: {
     defaultValue: true,
     getFunc: () => localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false',

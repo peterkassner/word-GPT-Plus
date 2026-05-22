@@ -45,6 +45,7 @@ export const languageMap: IStringKeyMap = {
 
 export const availableAPIs: IStringKeyMap = {
   official: 'official',
+  openrouter: 'openrouter',
   azure: 'azure',
   gemini: 'gemini',
   ollama: 'ollama',

@@ -1,35 +1,37 @@
 <template>
-  <div :class="tight ? 'mb-0' : 'mb-3'" class="flex items-center gap-2 text-sm font-medium text-main">
-    <slot name="icon">
-      <component :is="icon" v-if="icon" :size="iconSize" class="text-accent" />
-    </slot>
-    <span class="text-sm leading-[1.4] font-semibold text-secondary">{{ title }}</span>
-    <span v-if="required" class="ml-1 text-danger">*</span>
-  </div>
-  <div ref="dropdownRef" class="sort-dropdown relative">
-    <button
-      ref="triggerRef"
-      class="flex h-7 w-full cursor-pointer items-center justify-between gap-1 rounded-md border border-border-secondary px-2 py-1.5 text-sm leading-[1.4] text-main transition-all duration-fast ease-apple hover:border-accent-hover focus:[.active]:border-accent-hover focus:[.active]:shadow-md"
-      :class="{ active: dropDownOpen }"
-      @click="toggleDropdown()"
-    >
-      <component :is="customFrontIcon || SortAscIcon" v-if="fronticon" :size="14" />
-      <span class="text-center text-xs font-medium text-secondary">{{ placeholder || modelValue }}</span>
-      <ChevronDownIcon :size="14" />
-    </button>
-    <div
-      v-show="dropDownOpen"
-      ref="optionsRef"
-      class="sort-options fixed z-10 mt-0.5 max-h-50 min-w-37.5 overflow-hidden overflow-y-auto rounded-md border border-border-secondary bg-bg-tertiary shadow-lg"
-    >
+  <div class="single-select" :class="tight ? 'mb-0' : 'mb-3'" v-bind="$attrs">
+    <div class="flex items-center gap-2 text-sm font-medium text-main">
+      <slot name="icon">
+        <component :is="icon" v-if="icon" :size="iconSize" class="text-accent" />
+      </slot>
+      <span class="text-sm leading-[1.4] font-semibold text-secondary">{{ title }}</span>
+      <span v-if="required" class="ml-1 text-danger">*</span>
+    </div>
+    <div ref="dropdownRef" class="sort-dropdown relative">
       <button
-        v-for="key in keyList"
-        :key="key"
-        class="block min-h-[unset] w-full cursor-pointer border-none bg-bg-tertiary px-2 py-1 text-center text-sm leading-[1.4] text-main transition-all duration-fast ease-apple hover:bg-accent/50"
-        @click="selectItem(key)"
+        ref="triggerRef"
+        class="flex h-7 w-full cursor-pointer items-center justify-between gap-1 rounded-md border border-border-secondary px-2 py-1.5 text-sm leading-[1.4] text-main transition-all duration-fast ease-apple hover:border-accent-hover focus:[.active]:border-accent-hover focus:[.active]:shadow-md"
+        :class="{ active: dropDownOpen }"
+        @click="toggleDropdown()"
       >
-        <slot name="item" :item="key"> {{ key }} </slot>
+        <component :is="customFrontIcon || SortAscIcon" v-if="fronticon" :size="14" />
+        <span class="text-center text-xs font-medium text-secondary">{{ placeholder || modelValue }}</span>
+        <ChevronDownIcon :size="14" />
       </button>
+      <div
+        v-show="dropDownOpen"
+        ref="optionsRef"
+        class="sort-options fixed z-10 mt-0.5 max-h-50 min-w-37.5 overflow-hidden overflow-y-auto rounded-md border border-border-secondary bg-bg-tertiary shadow-lg"
+      >
+        <button
+          v-for="key in keyList"
+          :key="key"
+          class="block min-h-[unset] w-full cursor-pointer border-none bg-bg-tertiary px-2 py-1 text-center text-sm leading-[1.4] text-main transition-all duration-fast ease-apple hover:bg-accent/50"
+          @click="selectItem(key)"
+        >
+          <slot name="item" :item="key"> {{ key }} </slot>
+        </button>
+      </div>
     </div>
   </div>
 </template>

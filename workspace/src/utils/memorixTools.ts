@@ -2,6 +2,8 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { z } from 'zod'
 
 import { localStorageKey } from './enum'
+import { fetchJsonWithRetry } from './http'
+import { resolveProxyBase } from './proxyResolver'
 
 export interface MemorixToolDescriptor {
   tool_name?: string
@@ -30,7 +32,7 @@ export interface MemorixToolsConfig {
 
 export const DEFAULT_MEMORIX_CONFIG: MemorixToolsConfig = {
   enableMemorixTools: false,
-  mcpProxyHubUrl: 'http://localhost:3100',
+  mcpProxyHubUrl: resolveProxyBase('http://127.0.0.1:8096'),
   memorixAgentId: 'word-gpt-plus',
   memorixToolsEndpoint: '/api/tools/memorix',
   memorixToolsCallEndpoint: '/api/tools/memorix/call',
@@ -47,7 +49,8 @@ function clampNumber(raw: string | null | number | undefined, fallback: number):
 export function getMemorixToolsConfigFromStorage(context: MemorixToolRequestContext = {}): MemorixToolsConfig {
   return {
     enableMemorixTools: localStorage.getItem(localStorageKey.enableMemorixTools) === 'true',
-    mcpProxyHubUrl: localStorage.getItem(localStorageKey.mcpProxyHubUrl) || DEFAULT_MEMORIX_CONFIG.mcpProxyHubUrl,
+    mcpProxyHubUrl:
+      resolveProxyBase(localStorage.getItem(localStorageKey.mcpProxyHubUrl)) || DEFAULT_MEMORIX_CONFIG.mcpProxyHubUrl,
     memorixAgentId: localStorage.getItem(localStorageKey.memorixAgentId) || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
     memorixToolsEndpoint:
       localStorage.getItem(localStorageKey.memorixToolsEndpoint) || DEFAULT_MEMORIX_CONFIG.memorixToolsEndpoint,
@@ -66,7 +69,21 @@ export function getMemorixToolsConfigFromStorage(context: MemorixToolRequestCont
 }
 
 function normalizeToolName(raw: string | undefined): string {
-  return (raw || 'memorix_tool').replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_').slice(0, 80)
+  return (raw || 'memorix_tool')
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 80)
+}
+
+function getToolProxyBase(): string {
+  const proxySetting = typeof window !== 'undefined' ? localStorage.getItem(localStorageKey.proxy) : null
+  const proxyBaseInput =
+    proxySetting && proxySetting.trim()
+      ? proxySetting
+      : typeof window === 'undefined'
+        ? 'http://localhost:3100'
+        : window.location.origin
+  return resolveProxyBase(proxyBaseInput)
 }
 
 function schemaToZod(schema: any): z.ZodTypeAny {
@@ -93,7 +110,7 @@ function schemaToZod(schema: any): z.ZodTypeAny {
   }
 
   if (schema.type === 'string' || schema.jsonType === 'string') {
-    let next = z.string()
+    const next = z.string()
     if (schema.description) {
       next.describe(schema.description)
     }
@@ -134,41 +151,6 @@ function normalizeDescriptorToToolInput(descriptor: MemorixToolDescriptor): { na
   return { name, schema }
 }
 
-async function fetchJsonWithRetry(url: string, options: RequestInit, retries = 1, timeoutMs = 12000): Promise<any> {
-  let attempts = 0
-  let lastError: Error | null = null
-
-  while (attempts <= retries) {
-    attempts += 1
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal })
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        const body = await response.text()
-        throw new Error(`Request failed: ${response.status} ${response.statusText} ${body}`)
-      }
-
-      return await response.json()
-    } catch (error: unknown) {
-      clearTimeout(timeoutId)
-      lastError = error instanceof Error ? error : new Error(String(error))
-
-      if (attempts <= retries) {
-        await new Promise(resolve => setTimeout(resolve, Math.min(200 * attempts, 800)))
-        continue
-      }
-      throw lastError
-    }
-  }
-
-  throw lastError || new Error('Unknown fetch failure')
-}
-
 function buildLocalProxyUrl(
   endpoint: string,
   params: {
@@ -180,7 +162,7 @@ function buildLocalProxyUrl(
     toolName?: string
   },
 ): string {
-  const base = new URL(endpoint, window.location.origin)
+  const base = new URL(endpoint, getToolProxyBase())
   base.searchParams.set('mcpProxyHubUrl', params.mcpProxyHubUrl)
   base.searchParams.set('agentId', params.memorixAgentId)
   base.searchParams.set('memorixToolTimeoutMs', String(params.memorixToolTimeoutMs))
@@ -212,6 +194,11 @@ export async function getMemorixToolDescriptors(config: MemorixToolsConfig): Pro
   if (Array.isArray(response)) return response as MemorixToolDescriptor[]
   if (response && Array.isArray(response.tools)) return response.tools as MemorixToolDescriptor[]
   if (response && Array.isArray(response.toolDescriptors)) return response.toolDescriptors as MemorixToolDescriptor[]
+  console.warn('[Memorix] Unexpected tool descriptor shape', {
+    hasTools: !!response && Array.isArray((response as { tools?: unknown }).tools),
+    hasToolDescriptors: !!response && Array.isArray((response as { toolDescriptors?: unknown }).toolDescriptors),
+    type: response ? typeof response : typeof response,
+  })
   return []
 }
 
@@ -220,14 +207,17 @@ export async function invokeMemorixTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<string> {
-  const callEndpoint = buildLocalProxyUrl(config.memorixToolsCallEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint, {
-    mcpProxyHubUrl: config.mcpProxyHubUrl || DEFAULT_MEMORIX_CONFIG.mcpProxyHubUrl,
-    memorixAgentId: config.memorixAgentId || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
-    memorixToolTimeoutMs: config.memorixToolTimeoutMs || DEFAULT_MEMORIX_CONFIG.memorixToolTimeoutMs,
-    memorixMaxRetries: config.memorixMaxRetries || DEFAULT_MEMORIX_CONFIG.memorixMaxRetries,
-    forwardEndpoint: config.memorixToolsCallEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
-    toolName,
-  })
+  const callEndpoint = buildLocalProxyUrl(
+    config.memorixToolsCallEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
+    {
+      mcpProxyHubUrl: config.mcpProxyHubUrl || DEFAULT_MEMORIX_CONFIG.mcpProxyHubUrl,
+      memorixAgentId: config.memorixAgentId || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
+      memorixToolTimeoutMs: config.memorixToolTimeoutMs || DEFAULT_MEMORIX_CONFIG.memorixToolTimeoutMs,
+      memorixMaxRetries: config.memorixMaxRetries || DEFAULT_MEMORIX_CONFIG.memorixMaxRetries,
+      forwardEndpoint: config.memorixToolsCallEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
+      toolName,
+    },
+  )
   const requestPayload = {
     agentId: config.memorixAgentId || 'word-gpt-plus',
     toolName,
@@ -254,7 +244,9 @@ export async function invokeMemorixTool(
   }
 
   if (response.error) {
-    return typeof response.error === 'string' ? response.error : JSON.stringify(response.error)
+    const toolError = typeof response.error === 'string' ? response.error : JSON.stringify(response.error)
+    console.error('[Memorix] Tool invocation returned error', { toolName, error: toolError, response })
+    return toolError
   }
 
   return typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload ?? response)

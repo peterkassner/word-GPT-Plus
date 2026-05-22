@@ -7,6 +7,7 @@ import { AzureChatOpenAI, ChatOpenAI } from '@langchain/openai'
 import { createAgent } from 'langchain'
 
 import { IndexedDBSaver } from '@/api/checkpoints'
+import { createUUID } from '@/utils/uuid'
 
 import {
   AgentOptions,
@@ -15,24 +16,32 @@ import {
   GroqOptions,
   OllamaOptions,
   OpenAIOptions,
+  OpenRouterOptions,
   ProviderOptions,
 } from './types'
 
+function createOpenAIModel(opts: OpenAIOptions | OpenRouterOptions) {
+  const modelName = opts.model || 'gpt-5'
+  const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+  const route = opts.provider === 'openrouter' ? '/api/openrouter/v1' : '/api/openai/v1'
+  const baseURL = hasProxy
+    ? `${opts.proxy.baseURL}${route}`
+    : opts.config.baseURL ||
+      (opts.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1')
+  return new ChatOpenAI({
+    modelName,
+    configuration: {
+      apiKey: opts.config.apiKey,
+      baseURL,
+    },
+    temperature: opts.temperature ?? 0.7,
+    maxTokens: opts.maxTokens ?? 800,
+  })
+}
+
 const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
-  official: (opts: OpenAIOptions) => {
-    const modelName = opts.model || 'gpt-5'
-    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
-    const baseURL = hasProxy ? `${opts.proxy.baseURL}/api/openai/v1` : opts.config.baseURL || 'https://api.openai.com/v1'
-    return new ChatOpenAI({
-      modelName,
-      configuration: {
-        apiKey: opts.config.apiKey,
-        baseURL,
-      },
-      temperature: opts.temperature ?? 0.7,
-      maxTokens: opts.maxTokens ?? 800,
-    })
-  },
+  official: createOpenAIModel,
+  openrouter: createOpenAIModel,
 
   ollama: (opts: OllamaOptions) => {
     return new ChatOllama({
@@ -81,7 +90,7 @@ const checkpointer = new IndexedDBSaver()
 async function executeChatFlow(model: BaseChatModel, options: ProviderOptions): Promise<void> {
   try {
     if (!options.threadId) {
-      options.threadId = crypto.randomUUID()
+      options.threadId = createUUID()
       console.log(`[Chat] New thread started: ${options.threadId}`)
     }
     const agent = createAgent({
@@ -124,8 +133,8 @@ async function executeChatFlow(model: BaseChatModel, options: ProviderOptions): 
 
 async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Promise<void> {
   type AgentEventType = Exclude<Parameters<NonNullable<AgentOptions['onAgentEvent']>>[0]['type'], undefined>
-  const requestId = crypto.randomUUID()
-  const turnId = options.threadId || crypto.randomUUID()
+  const requestId = createUUID()
+  const turnId = options.threadId || createUUID()
   const emitAgentEvent = (type: AgentEventType, data?: Record<string, unknown>) => {
     if (!options.onAgentEvent) return
     options.onAgentEvent({
@@ -139,7 +148,7 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
 
   try {
     if (!options.threadId) {
-      options.threadId = crypto.randomUUID()
+      options.threadId = createUUID()
       console.log(`[Agent] New thread started: ${options.threadId}`)
     }
     emitAgentEvent('agent.turn.start', {
@@ -205,11 +214,7 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
             name: toolCall.name,
             args: toolCall.args,
           })
-          emitAgentEvent('agent.tool.call', {
-            toolName: toolCall.name,
-            toolArgs: toolCall.args,
-            hasAgentThread: !!options.threadId,
-          })
+          // Tool-call telemetry is emitted from HomePage onToolCall (previews + provider flags).
           if (options.onToolCall) {
             options.onToolCall(toolCall.name, toolCall.args)
           }
@@ -225,11 +230,7 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
           contentLength: toolContent.length,
           contentPreview: toolContent.substring(0, 100),
         })
-        emitAgentEvent('agent.tool.result', {
-          toolName,
-          contentLength: toolContent.length,
-          contentPreview: toolContent.substring(0, 120),
-        })
+        // Tool-result telemetry is emitted from HomePage onToolResult (richer previews + flags).
         if (options.onToolResult) {
           options.onToolResult(toolName, toolContent)
         }

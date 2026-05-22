@@ -133,13 +133,25 @@ Choose the method that best suits your needs:
    docker compose up --build
    ```
 
-   Logs will be written under `./word-gpt-plus-logs`.
+  Logs will be written under `./word-gpt-plus-logs`.
 
-   Then in the Word add-in settings, enable proxy and set proxy URL to `http://localhost:3100`.
+   Then in the Word add-in settings, enable proxy and set proxy URL to `http://<PC_IP>:3100`.
 
-3. Download [manifest.xml](https://github.com/Kuingsmile/word-GPT-Plus/blob/master/release/self-hosted/manifest.xml).
-4. Edit `manifest.xml`: Replace all instances of `http://localhost:3000` with your server's address.
-5. Proceed to the [Add-in Installation Guide](#add-in-installation-guide).
+3. Regenerate the self-hosted manifest to match your current LAN IP and sideload it:
+
+   ```bash
+   yarn dev:lan
+   ```
+
+   or, if you only want the manifest file updated:
+
+   ```bash
+   yarn generate:manifest:lan --host=<PC_IP>
+   ```
+
+4. Download [manifest.lan.xml](release/self-hosted/manifest.lan.xml).
+5. If you manually edit the manifest instead, replace every `http://<host>:3000` and `<AppDomain>` host value.
+6. Proceed to the [Add-in Installation Guide](#add-in-installation-guide).
 
 </details>
 

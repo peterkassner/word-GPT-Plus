@@ -3,6 +3,12 @@ import { evaluate } from 'mathjs'
 import { z } from 'zod'
 
 import { localStorageKey } from './enum'
+import { resolveProxyBase } from './proxyResolver'
+import {
+  clearTelemetryQueueIndexedDb,
+  readTelemetryQueueFromIndexedDb,
+  writeTelemetryQueueToIndexedDb,
+} from './telemetryQueueIndexedDb'
 
 export type GeneralToolName = 'fetchWebContent' | 'searchWeb' | 'getCurrentDate' | 'calculateMath'
 
@@ -17,31 +23,19 @@ export interface TelemetryEventRecord {
 
 const SENSITIVE_KEY_PATTERN = /(authorization|cookie|secret|token|password|api[_-]?key|bearer)/i
 
-function trimTrailingSlashes(value: string): string {
-  return value.replace(/\/+$/, '')
-}
-
-function toUrlOrNull(input: string): URL | null {
-  try {
-    return new URL(input)
-  } catch {
-    return null
-  }
-}
-
 function resolveProxyBaseFromStorage(): string | null {
   const storage = getTelemetryStorage()
   if (!storage) return null
 
   const proxyEnabled = storage.getItem(localStorageKey.enableProxy) === 'true'
-  const proxyUrl = trimTrailingSlashes(storage.getItem(localStorageKey.proxy) || '')
-  if (proxyEnabled && proxyUrl && toUrlOrNull(proxyUrl)) {
-    return proxyUrl
+  const proxyUrl = storage.getItem(localStorageKey.proxy) || ''
+  if (proxyEnabled && proxyUrl) {
+    return resolveProxyBase(proxyUrl)
   }
 
-  const mcpProxy = trimTrailingSlashes(storage.getItem(localStorageKey.mcpProxyHubUrl) || '')
-  if (mcpProxy && toUrlOrNull(mcpProxy)) {
-    return mcpProxy
+  const mcpProxy = storage.getItem(localStorageKey.mcpProxyHubUrl) || ''
+  if (mcpProxy) {
+    return resolveProxyBase(mcpProxy)
   }
 
   return null
@@ -93,6 +87,36 @@ function safeParseQueue(raw: string | null): TelemetryEventRecord[] {
   }
 }
 
+function mergeTelemetryQueues(a: TelemetryEventRecord[], b: TelemetryEventRecord[]): TelemetryEventRecord[] {
+  const seen = new Set<string>()
+  const out: TelemetryEventRecord[] = []
+  const stamp = (e: TelemetryEventRecord) =>
+    `${e.type}:${e.queuedAt || ''}:${e.ts || ''}:${String(e.requestId ?? '')}:${String(e.turnId ?? '')}`
+  for (const e of [...a, ...b]) {
+    const k = stamp(e)
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(e)
+  }
+  out.sort((x, y) => String(x.queuedAt || x.ts || '').localeCompare(String(y.queuedAt || y.ts || '')))
+  return out
+}
+
+/** Merge IndexedDB backup into localStorage queue (call once at app boot). */
+export async function hydrateTelemetryQueueFromIndexedDb(): Promise<void> {
+  const storage = getTelemetryStorage()
+  if (!storage) return
+  const fromIdb = (await readTelemetryQueueFromIndexedDb()) as TelemetryEventRecord[]
+  if (fromIdb.length === 0) return
+  const fromLs = safeParseQueue(storage.getItem(TELEMETRY_QUEUE_KEY))
+  const merged = mergeTelemetryQueues(fromLs, fromIdb)
+  const rawMaxSize = storage.getItem(localStorageKey.telemetryMaxQueueSize)
+  const maxSize = Number.isFinite(Number(rawMaxSize)) ? Math.max(50, Number(rawMaxSize)) : DEFAULT_TELEMETRY_QUEUE_SIZE
+  const normalized = merged.slice(-maxSize)
+  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(normalized))
+  await writeTelemetryQueueToIndexedDb(normalized).catch(() => undefined)
+}
+
 function getTelemetryStorage(): Storage | null {
   if (typeof window === 'undefined') return null
   try {
@@ -119,6 +143,7 @@ export function persistTelemetryQueue(events: TelemetryEventRecord[]) {
   const maxSize = Number.isFinite(Number(rawMaxSize)) ? Math.max(50, Number(rawMaxSize)) : DEFAULT_TELEMETRY_QUEUE_SIZE
   const normalized = events.slice(-maxSize)
   storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(normalized))
+  void writeTelemetryQueueToIndexedDb(normalized).catch(() => undefined)
 }
 
 export function appendTelemetryEvent(event: TelemetryEventRecord) {
@@ -136,6 +161,7 @@ export function clearTelemetryQueue() {
   const storage = getTelemetryStorage()
   if (!storage) return
   storage.removeItem(TELEMETRY_QUEUE_KEY)
+  void clearTelemetryQueueIndexedDb().catch(() => undefined)
 }
 
 export async function flushTelemetryQueueToProxy(
@@ -149,32 +175,69 @@ export async function flushTelemetryQueueToProxy(
   }
 
   const configuredBase = resolveProxyBaseFromStorage()
-  const resolvedEndpoint = isAbsoluteUrl(endpoint)
+  const endpoints = new Set<string>()
+
+  const preferredEndpoint = isAbsoluteUrl(endpoint)
     ? endpoint
     : new URL(endpoint, configuredBase || window.location.origin).toString()
+  endpoints.add(preferredEndpoint)
+
+  if (!configuredBase) {
+    const proxyFallbackBase = resolveProxyBase('http://localhost:3100')
+    endpoints.add(new URL(endpoint, proxyFallbackBase).toString())
+  }
+
+  let lastError: Error | string | null = null
+  let lastResponseText = ''
 
   try {
     const payload = { events: queue }
-    const response = await fetch(resolvedEndpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
 
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => '')
-      throw new Error(`Telemetry flush failed: ${response.status} ${response.statusText} ${responseText}`)
+    for (const resolvedEndpoint of endpoints) {
+      try {
+        const response = await fetch(resolvedEndpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
+        if (!response.ok) {
+          const responseText = await response.text().catch(() => '')
+          lastResponseText = responseText
+          console.warn('[Telemetry] Endpoint rejected telemetry batch', {
+            endpoint: resolvedEndpoint,
+            status: response.status,
+            statusText: response.statusText,
+          })
+          lastError = new Error(`Telemetry flush failed: ${response.status} ${response.statusText} ${responseText}`)
+          continue
+        }
+
+        clearTelemetryQueue()
+        return { success: true, flushed: queueSize }
+      } catch (error) {
+        lastError = error instanceof Error ? error : String(error)
+        console.warn('[Telemetry] Endpoint request failed', {
+          endpoint: resolvedEndpoint,
+          error: lastError,
+        })
+      }
     }
 
-    clearTelemetryQueue()
-    return { success: true, flushed: queueSize }
+    throw lastError || new Error(`Telemetry flush failed for all endpoints: ${Array.from(endpoints).join(', ')}`)
   } catch (error) {
+    console.error('[Telemetry] Queue flush failed', {
+      endpoints: Array.from(endpoints),
+      queueSize,
+      error: error instanceof Error ? error.message : String(error),
+    })
     appendTelemetryEvent({
       type: 'agent.telemetry.flush.failed',
       ts: new Date().toISOString(),
       queueSize,
-      endpoint: resolvedEndpoint,
+      endpoint: Array.from(endpoints).join(', '),
       error: error instanceof Error ? error.message : String(error),
+      endpointResponseBody: lastResponseText || undefined,
     })
     return { success: false, flushed: 0 }
   }

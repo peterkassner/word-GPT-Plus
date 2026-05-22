@@ -110,9 +110,47 @@ const wordToolDefinitions: Record<WordToolName, WordToolDefinition> = {
       const { newText } = args
       return Word.run(async context => {
         const range = context.document.getSelection()
-        range.insertText(newText, 'Replace')
+        range.load([
+          'style',
+          'styleBuiltIn',
+          'font/name',
+          'font/size',
+          'font/bold',
+          'font/italic',
+          'font/underline',
+          'font/color',
+        ])
         await context.sync()
-        return 'Successfully replaced selected text'
+
+        const originalStyle = range.style
+        const originalStyleBuiltIn = range.styleBuiltIn as string | undefined
+        const originalFont = {
+          name: range.font.name,
+          size: range.font.size,
+          bold: range.font.bold,
+          italic: range.font.italic,
+          underline: range.font.underline,
+          color: range.font.color,
+        }
+
+        range.insertText(newText, 'Replace')
+
+        const updatedRange = context.document.getSelection()
+        if (originalStyleBuiltIn && originalStyleBuiltIn !== 'Other') {
+          updatedRange.styleBuiltIn = originalStyleBuiltIn as Word.BuiltInStyleName
+        } else if (originalStyle) {
+          updatedRange.style = originalStyle
+        }
+        if (originalFont.name) updatedRange.font.name = originalFont.name
+        if (typeof originalFont.size === 'number' && Number.isFinite(originalFont.size))
+          updatedRange.font.size = originalFont.size
+        if (typeof originalFont.bold === 'boolean') updatedRange.font.bold = originalFont.bold
+        if (typeof originalFont.italic === 'boolean') updatedRange.font.italic = originalFont.italic
+        if (originalFont.underline) updatedRange.font.underline = originalFont.underline as Word.UnderlineType
+        if (originalFont.color) updatedRange.font.color = originalFont.color
+
+        await context.sync()
+        return 'Successfully replaced selected text and preserved selection style'
       })
     },
   },
@@ -159,18 +197,7 @@ const wordToolDefinitions: Record<WordToolName, WordToolDefinition> = {
         },
         style: {
           type: 'string',
-          description: 'Optional Word built-in style: Normal, Heading1, Heading2, Heading3, Quote, etc.',
-          enum: [
-            'Normal',
-            'Heading1',
-            'Heading2',
-            'Heading3',
-            'Heading4',
-            'Quote',
-            'IntenseQuote',
-            'Title',
-            'Subtitle',
-          ],
+          description: 'Optional paragraph style name (built-in or custom, as defined in the current document).',
         },
       },
       required: ['text'],
@@ -187,7 +214,7 @@ const wordToolDefinitions: Record<WordToolName, WordToolDefinition> = {
           paragraph = range.insertParagraph(text, location as 'After' | 'Before')
         }
         if (style) {
-          paragraph.styleBuiltIn = style as Word.BuiltInStyleName
+          paragraph.style = style
         }
         await context.sync()
         return `Successfully inserted paragraph at ${location}`
