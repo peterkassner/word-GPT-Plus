@@ -12,6 +12,8 @@ const LOG_DIR = process.env.LOG_DIR || `${process.cwd()}/logs`
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*'
 const MEMORIX_DISCOVER_PATH = '/api/tools/memorix'
 const MEMORIX_CALL_PATH = '/api/tools/memorix/call'
+const MEMORIX_FORWARD_DISCOVER_PATH = '/servers/memorix/tools/list'
+const MEMORIX_FORWARD_CALL_PATH = '/servers/memorix/tools/call'
 const QDRANT_DISCOVER_PATH = '/api/tools/qdrant'
 const QDRANT_CALL_PATH = '/api/tools/qdrant/call'
 const QDRANT_FORWARD_DISCOVER_PATH = '/servers/Qdrant_Resources/tools/list'
@@ -26,6 +28,16 @@ const providerTargets = {
   openai: 'https://api.openai.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
   groq: 'https://api.groq.com/openai/v1',
+  gemini: 'https://generativelanguage.googleapis.com',
+  ollama: process.env.OLLAMA_ENDPOINT || 'http://localhost:11434',
+}
+
+function stripSearchParam(parsedUrl, paramName) {
+  const pairs = []
+  parsedUrl.searchParams.forEach((v, k) => {
+    if (k !== paramName) pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+  })
+  return pairs.join('&')
 }
 
 function writeEntry(stream, entry) {
@@ -60,6 +72,28 @@ function getRequestTarget(url) {
     const tail = pathname.replace('/api/groq/v1', '') || '/'
     const upstreamPath = tail
     return { provider: 'groq', upstreamURL: `${providerTargets.groq}${upstreamPath}${parsed.search}` }
+  }
+
+  if (pathname === '/api/gemini' || pathname.startsWith('/api/gemini/')) {
+    const tail = pathname.replace('/api/gemini', '') || '/'
+    return { provider: 'gemini', upstreamURL: `${providerTargets.gemini}${tail}${parsed.search}` }
+  }
+
+  if (pathname === '/api/azure' || pathname.startsWith('/api/azure/')) {
+    const azureEndpoint = parsed.searchParams.get('azureEndpoint')
+    if (!azureEndpoint) return null
+    const tail = pathname.replace('/api/azure', '') || '/'
+    const cleanBase = azureEndpoint.replace(/\/$/, '')
+    const qs = stripSearchParam(parsed, 'azureEndpoint')
+    return { provider: 'azure', upstreamURL: `${cleanBase}${tail}${qs ? `?${qs}` : ''}` }
+  }
+
+  if (pathname === '/api/ollama' || pathname.startsWith('/api/ollama/')) {
+    const customEndpoint = parsed.searchParams.get('ollamaEndpoint')
+    const base = customEndpoint ? customEndpoint.replace(/\/$/, '') : providerTargets.ollama
+    const tail = pathname.replace('/api/ollama', '') || '/'
+    const qs = stripSearchParam(parsed, 'ollamaEndpoint')
+    return { provider: 'ollama', upstreamURL: `${base}${tail}${qs ? `?${qs}` : ''}` }
   }
 
   return null
@@ -119,7 +153,8 @@ async function resolveLogDir() {
 async function handleMemorixDiscover(req, res, logger, requestId) {
   const requestUrl = new URL(req.url || '/', 'http://localhost')
   const config = getMemorixProxyConfig(req.url || '/')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint || MEMORIX_DISCOVER_PATH
+  const forwardEndpoint =
+    requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint || MEMORIX_FORWARD_DISCOVER_PATH
   const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
@@ -188,7 +223,8 @@ async function handleMemorixDiscover(req, res, logger, requestId) {
 async function handleMemorixCall(req, res, logger, requestId) {
   const config = getMemorixProxyConfig(req.url || '/')
   const requestUrl = new URL(req.url || '/', 'http://localhost')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint || MEMORIX_CALL_PATH
+  const forwardEndpoint =
+    requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint || MEMORIX_FORWARD_CALL_PATH
   const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
@@ -723,6 +759,19 @@ async function handleTelemetryGet(_req, res, parsedUrl) {
   res.end(JSON.stringify({ ok: true, count: sliced.length, events: sliced }))
 }
 
+function logResponseBody(logger, requestId, text, contentType) {
+  if (contentType.includes('application/json')) {
+    try {
+      const parsed = JSON.parse(text)
+      logger.write({ type: 'response', requestId, body: parsed })
+      return
+    } catch {
+      // fall through to raw
+    }
+  }
+  logger.write({ type: 'response', requestId, body: text })
+}
+
 function createLogger(proxyUrl) {
   const stream = createWriteStream(proxyUrl, { flags: 'a' })
   return {
@@ -746,8 +795,14 @@ function getMemorixProxyConfig(reqUrl) {
       url.searchParams.get('mcpProxyHubUrl') || process.env.MEMORIX_PROXY_HUB_URL || 'http://localhost:8096',
     agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
     toolEndpoint:
-      url.searchParams.get('memorixToolsEndpoint') || url.searchParams.get('forwardEndpoint') || MEMORIX_DISCOVER_PATH,
-    callEndpoint: url.searchParams.get('memorixToolsCallEndpoint') || MEMORIX_CALL_PATH,
+      url.searchParams.get('memorixToolsEndpoint') ||
+      url.searchParams.get('forwardEndpoint') ||
+      process.env.MEMORIX_TOOLS_ENDPOINT ||
+      MEMORIX_FORWARD_DISCOVER_PATH,
+    callEndpoint:
+      url.searchParams.get('memorixToolsCallEndpoint') ||
+      process.env.MEMORIX_TOOLS_CALL_ENDPOINT ||
+      MEMORIX_FORWARD_CALL_PATH,
     timeoutMs: parseNumeric(url.searchParams.get('memorixToolTimeoutMs'), 12000),
     maxRetries: parseNumeric(url.searchParams.get('memorixMaxRetries'), 2),
     toolName: url.searchParams.get('toolName') || '',
@@ -1091,7 +1146,11 @@ async function handleRequest(req, res) {
         error: 'Proxy route not found',
         supported: [
           '/api/openai/v1',
+          '/api/openrouter/v1',
           '/api/groq/v1',
+          '/api/gemini',
+          '/api/azure',
+          '/api/ollama',
           TELEMETRY_PATH,
           MEMORIX_DISCOVER_PATH,
           MEMORIX_CALL_PATH,
@@ -1117,15 +1176,22 @@ async function handleRequest(req, res) {
       requestStream = false
     }
 
+    const t0 = Date.now()
     const upstreamResponse = await globalThis.fetch(route.upstreamURL, {
       method: req.method,
       headers: buildUpstreamHeaders(req.headers),
-      body: requestBody,
+      body: requestBody || undefined,
     })
+    const ttfb = Date.now() - t0
 
     copyResponseHeaders(upstreamResponse, res)
     res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN)
     res.statusCode = upstreamResponse.status
+
+    const responseHeaders = {}
+    upstreamResponse.headers.forEach((value, key) => {
+      responseHeaders[key] = value
+    })
 
     logger.write({
       type: 'meta',
@@ -1135,10 +1201,12 @@ async function handleRequest(req, res) {
       request: {
         method: req.method,
         headers: sanitizeHeaders(buildUpstreamHeaders(req.headers)),
-        bodyPreview: requestBody ? requestBody.slice(0, 2048) : '',
+        body: requestBody || null,
       },
       status: upstreamResponse.status,
       requestStream,
+      ttfbMs: ttfb,
+      responseHeaders: sanitizeHeaders(responseHeaders),
     })
 
     const responseContentType = upstreamResponse.headers.get('content-type') || ''
@@ -1146,7 +1214,7 @@ async function handleRequest(req, res) {
     if (!upstreamResponse.body) {
       const text = await upstreamResponse.text()
       const textPayload = text || ''
-      logger.writeRaw(textPayload)
+      logResponseBody(logger, requestId, textPayload, responseContentType)
       res.end(textPayload)
       return
     }
@@ -1155,6 +1223,7 @@ async function handleRequest(req, res) {
     const reader = upstreamResponse.body.getReader()
     let carry = ''
     let byteCount = 0
+    let fullResponseText = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -1165,7 +1234,7 @@ async function handleRequest(req, res) {
       byteCount += value.byteLength
       res.write(value)
       const chunkText = decoder.decode(value, { stream: true })
-      logger.writeRaw(chunkText)
+      fullResponseText += chunkText
 
       if (requestStream && responseContentType.includes('text/event-stream')) {
         carry += chunkText
@@ -1211,10 +1280,17 @@ async function handleRequest(req, res) {
       })
     }
 
+    if (!requestStream) {
+      logResponseBody(logger, requestId, fullResponseText, responseContentType)
+    }
+
+    const elapsed = Date.now() - t0
     logger.write({
       type: 'end',
       requestId,
       totalBytes: byteCount,
+      elapsedMs: elapsed,
+      ttfbMs: ttfb,
     })
     res.end()
   } catch (error) {

@@ -309,10 +309,10 @@
                 :key-list="settingPreset.api.optionObj.map(item => item.value)"
                 :title="$t('providerLabel')"
                 :fronticon="false"
-              :placeholder="getApiProviderLabel(settingForm.api)"
+                :placeholder="getApiProviderLabel(settingForm.api)"
               >
                 <template #item="{ item }">
-                {{ getApiProviderLabel(item as string) }}
+                  {{ getApiProviderLabel(item as string) }}
                 </template>
               </SingleSelect>
             </SettingCard>
@@ -712,7 +712,7 @@ const getApiProviderLabel = (platform: string) => {
   return platform
 }
 
-const resolveProviderPlatform = (platform: string) => (platform === 'openrouter' ? 'official' : platform)
+const resolveProviderPlatform = (platform: string) => platform
 
 const telemetryFlushIntervalSeconds = ref(
   Math.max(5, Number(localStorage.getItem(localStorageKey.telemetryFlushIntervalSeconds) || 30)),
@@ -833,7 +833,7 @@ const getCustomModelsKey = (platform: string): SettingNames | null => {
 }
 
 const loadCustomModels = () => {
-  const platforms = ['official', 'gemini', 'ollama', 'groq']
+  const platforms = ['official', 'openrouter', 'gemini', 'ollama', 'groq']
   platforms.forEach(platform => {
     const key = getCustomModelsKey(platform)
     if (key && settingPreset[key].getFunc) {

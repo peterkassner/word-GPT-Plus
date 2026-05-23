@@ -12,15 +12,15 @@
   <!-- Begin Basic Settings: Add-in metadata, used for all versions of Office unless override provided. -->
 
   <!-- IMPORTANT! Id must be unique for your add-in, if you reuse this ID ensure you change it to a new GUID. -->
-  <Id>6b20e038-5f8e-4e3b-8481-976c5a9c0bc3</Id>
+  <Id>d693ce9b-9d33-4cea-a114-b24e93ce9386</Id>
 
   <!--Version. Updates from the store only get triggered if there is a version change. -->
-  <Version>1.0.0.1</Version>
-  <ProviderName>Kuingsmile</ProviderName>
+  <Version>1.0.0.3</Version>
+  <ProviderName>PKJ</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <!-- The display name of your add-in, used on the install screens and in Office add-in dialogs. -->
-  <DisplayName DefaultValue="Word GPT Plus" />
-  <Description DefaultValue="Integrate the Power of AI Directly into Word"/>
+  <DisplayName DefaultValue="wdGPT" />
+  <Description DefaultValue="wdGPT integrates AI directly into Word"/>
 
   <!-- Icon for your add-in. Used on installation screens and the add-ins dialog. -->
   <IconUrl DefaultValue="http://192.168.1.71:3232/assets/icon-32.png" />
@@ -116,13 +116,13 @@
         <bt:Url id="Taskpane.Url" DefaultValue="http://192.168.1.71:3232/index.html" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Get started with chatGPT!" />
-        <bt:String id="CommandsGroup.Label" DefaultValue="GPT" />
-        <bt:String id="TaskpaneButton.Label" DefaultValue="GPT Plus" />
+        <bt:String id="GetStarted.Title" DefaultValue="Get started with wdGPT!" />
+        <bt:String id="CommandsGroup.Label" DefaultValue="wdGPT" />
+        <bt:String id="TaskpaneButton.Label" DefaultValue="wdGPT" />
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Go to the HOME tab and click the 'Show Taskpane' button to get started." />
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Click to Show a Taskpane" />
+        <bt:String id="GetStarted.Description" DefaultValue="wdGPT loaded successfully. Go to the HOME tab and click wdGPT to open the task pane." />
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open wdGPT" />
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

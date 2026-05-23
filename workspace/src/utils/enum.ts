@@ -51,6 +51,14 @@ export const localStorageKey = {
   telemetryMaxQueueSize: 'agentTelemetryMaxQueueSize',
   telemetryConfigVersion: 'telemetryConfigVersion',
   telemetryRedactSensitive: 'telemetryRedactSensitive',
+  // openrouter api
+  openrouterAPIKey: 'openrouterAPIKey',
+  openrouterBasePath: 'openrouterBasePath',
+  openrouterModel: 'openrouterModel',
+  openrouterCustomModel: 'openrouterCustomModel',
+  openrouterCustomModels: 'openrouterCustomModels',
+  openrouterTemperature: 'openrouterTemperature',
+  openrouterMaxTokens: 'openrouterMaxTokens',
   // gemini api
   geminiAPIKey: 'geminiAPIKey',
   geminiMaxTokens: 'geminiMaxTokens',

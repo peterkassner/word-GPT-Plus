@@ -20,14 +20,27 @@ import {
   ProviderOptions,
 } from './types'
 
-function createOpenAIModel(opts: OpenAIOptions | OpenRouterOptions) {
+function createOpenAIModel(opts: OpenAIOptions) {
   const modelName = opts.model || 'gpt-5'
   const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
-  const route = opts.provider === 'openrouter' ? '/api/openrouter/v1' : '/api/openai/v1'
+  const baseURL = hasProxy ? `${opts.proxy.baseURL}/api/openai/v1` : opts.config.baseURL || 'https://api.openai.com/v1'
+  return new ChatOpenAI({
+    modelName,
+    configuration: {
+      apiKey: opts.config.apiKey,
+      baseURL,
+    },
+    temperature: opts.temperature ?? 0.7,
+    maxTokens: opts.maxTokens ?? 800,
+  })
+}
+
+function createOpenRouterModel(opts: OpenRouterOptions) {
+  const modelName = opts.model || 'anthropic/claude-sonnet-4'
+  const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
   const baseURL = hasProxy
-    ? `${opts.proxy.baseURL}${route}`
-    : opts.config.baseURL ||
-      (opts.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1')
+    ? `${opts.proxy.baseURL}/api/openrouter/v1`
+    : opts.config.baseURL || 'https://openrouter.ai/api/v1'
   return new ChatOpenAI({
     modelName,
     configuration: {
@@ -41,12 +54,17 @@ function createOpenAIModel(opts: OpenAIOptions | OpenRouterOptions) {
 
 const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   official: createOpenAIModel,
-  openrouter: createOpenAIModel,
+  openrouter: createOpenRouterModel,
 
   ollama: (opts: OllamaOptions) => {
+    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+    const directEndpoint = opts.ollamaEndpoint?.replace(/\/$/, '') || 'http://localhost:11434'
+    const baseUrl = hasProxy
+      ? `${opts.proxy.baseURL}/api/ollama?ollamaEndpoint=${encodeURIComponent(directEndpoint)}`
+      : directEndpoint
     return new ChatOllama({
       model: opts.ollamaModel,
-      baseUrl: opts.ollamaEndpoint?.replace(/\/$/, '') || 'http://localhost:11434',
+      baseUrl,
       temperature: opts.temperature,
     })
   },
@@ -63,6 +81,16 @@ const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   },
 
   gemini: (opts: GeminiOptions) => {
+    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+    if (hasProxy) {
+      return new ChatGoogleGenerativeAI({
+        model: opts.geminiModel ?? 'gemini-3-pro-preview',
+        apiKey: opts.geminiAPIKey,
+        temperature: opts.temperature ?? 0.7,
+        maxOutputTokens: opts.maxTokens ?? 800,
+        baseUrl: `${opts.proxy!.baseURL}/api/gemini`,
+      })
+    }
     return new ChatGoogleGenerativeAI({
       model: opts.geminiModel ?? 'gemini-3-pro-preview',
       apiKey: opts.geminiAPIKey,
@@ -72,6 +100,19 @@ const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   },
 
   azure: (opts: AzureOptions) => {
+    const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+    if (hasProxy) {
+      const azureEndpoint = opts.azureAPIEndpoint?.replace(/\/$/, '') || ''
+      return new AzureChatOpenAI({
+        model: opts.azureDeploymentName,
+        temperature: opts.temperature ?? 0.7,
+        maxTokens: opts.maxTokens ?? 800,
+        azureOpenAIApiKey: opts.azureAPIKey,
+        azureOpenAIEndpoint: `${opts.proxy!.baseURL}/api/azure?azureEndpoint=${encodeURIComponent(azureEndpoint)}`,
+        azureOpenAIApiDeploymentName: opts.azureDeploymentName,
+        azureOpenAIApiVersion: opts.azureAPIVersion ?? '2024-10-01',
+      })
+    }
     return new AzureChatOpenAI({
       model: opts.azureDeploymentName,
       temperature: opts.temperature ?? 0.7,

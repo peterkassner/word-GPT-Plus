@@ -13,7 +13,6 @@ import {
 export type GeneralToolName = 'fetchWebContent' | 'searchWeb' | 'getCurrentDate' | 'calculateMath'
 
 export const TELEMETRY_QUEUE_KEY = 'agentEventQueue'
-const DEFAULT_TELEMETRY_QUEUE_SIZE = 150
 
 export interface TelemetryEventRecord {
   type: string
@@ -46,20 +45,14 @@ function isAbsoluteUrl(value: string): boolean {
 }
 
 function sanitizeTelemetryValue(value: unknown, depth = 0): unknown {
-  if (depth > 4) return '[max-depth]'
+  if (depth > 20) return '[max-depth]'
 
   if (value === null || value === undefined) return value
   if (typeof value === 'number' || typeof value === 'boolean') return value
-
-  if (typeof value === 'string') {
-    if (value.length > 4000) {
-      return `${value.slice(0, 4000)}...[truncated]`
-    }
-    return value
-  }
+  if (typeof value === 'string') return value
 
   if (Array.isArray(value)) {
-    return value.slice(0, 80).map(item => sanitizeTelemetryValue(item, depth + 1))
+    return value.map(item => sanitizeTelemetryValue(item, depth + 1))
   }
 
   if (typeof value === 'object') {
@@ -110,11 +103,8 @@ export async function hydrateTelemetryQueueFromIndexedDb(): Promise<void> {
   if (fromIdb.length === 0) return
   const fromLs = safeParseQueue(storage.getItem(TELEMETRY_QUEUE_KEY))
   const merged = mergeTelemetryQueues(fromLs, fromIdb)
-  const rawMaxSize = storage.getItem(localStorageKey.telemetryMaxQueueSize)
-  const maxSize = Number.isFinite(Number(rawMaxSize)) ? Math.max(50, Number(rawMaxSize)) : DEFAULT_TELEMETRY_QUEUE_SIZE
-  const normalized = merged.slice(-maxSize)
-  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(normalized))
-  await writeTelemetryQueueToIndexedDb(normalized).catch(() => undefined)
+  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(merged))
+  await writeTelemetryQueueToIndexedDb(merged).catch(() => undefined)
 }
 
 function getTelemetryStorage(): Storage | null {
@@ -139,11 +129,8 @@ export function loadTelemetryQueue(): TelemetryEventRecord[] {
 export function persistTelemetryQueue(events: TelemetryEventRecord[]) {
   const storage = getTelemetryStorage()
   if (!storage) return
-  const rawMaxSize = storage.getItem(localStorageKey.telemetryMaxQueueSize)
-  const maxSize = Number.isFinite(Number(rawMaxSize)) ? Math.max(50, Number(rawMaxSize)) : DEFAULT_TELEMETRY_QUEUE_SIZE
-  const normalized = events.slice(-maxSize)
-  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(normalized))
-  void writeTelemetryQueueToIndexedDb(normalized).catch(() => undefined)
+  storage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(events))
+  void writeTelemetryQueueToIndexedDb(events).catch(() => undefined)
 }
 
 export function appendTelemetryEvent(event: TelemetryEventRecord) {

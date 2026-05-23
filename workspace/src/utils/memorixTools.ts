@@ -25,6 +25,8 @@ export interface MemorixToolsConfig {
   memorixAgentId: string
   memorixToolsEndpoint: string
   memorixToolsCallEndpoint: string
+  memorixForwardToolsEndpoint?: string
+  memorixForwardToolsCallEndpoint?: string
   memorixToolTimeoutMs: number
   memorixMaxRetries: number
   context?: MemorixToolRequestContext
@@ -46,16 +48,52 @@ function clampNumber(raw: string | null | number | undefined, fallback: number):
   return fallback
 }
 
+function normalizeMemorixServerPath(raw: string | null): string {
+  const next = (raw || '').trim()
+  if (!next) return ''
+  if (!next.includes('/servers/')) return next
+  try {
+    const parsed = new URL(next, typeof window === 'undefined' ? 'http://localhost' : window.location.origin)
+    if (parsed.pathname.startsWith('/servers/')) return parsed.pathname
+  } catch {
+    if (next.startsWith('/servers/')) return next
+  }
+  return next
+}
+
+function normalizeMemorixLocalEndpoint(raw: string | null, fallback: string): string {
+  const next = normalizeMemorixServerPath(raw)
+  if (!next) return fallback
+  if (next.startsWith('/servers/')) return fallback
+  return next
+}
+
+function normalizeMemorixForwardEndpoint(raw: string | null): string | undefined {
+  const next = normalizeMemorixServerPath(raw)
+  if (!next) return undefined
+  if (next.startsWith('/servers/')) return next
+  return undefined
+}
+
 export function getMemorixToolsConfigFromStorage(context: MemorixToolRequestContext = {}): MemorixToolsConfig {
+  const storedToolsEndpoint = localStorage.getItem(localStorageKey.memorixToolsEndpoint)
+  const storedCallEndpoint = localStorage.getItem(localStorageKey.memorixToolsCallEndpoint)
+
   return {
     enableMemorixTools: localStorage.getItem(localStorageKey.enableMemorixTools) === 'true',
     mcpProxyHubUrl:
       resolveProxyBase(localStorage.getItem(localStorageKey.mcpProxyHubUrl)) || DEFAULT_MEMORIX_CONFIG.mcpProxyHubUrl,
     memorixAgentId: localStorage.getItem(localStorageKey.memorixAgentId) || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
-    memorixToolsEndpoint:
-      localStorage.getItem(localStorageKey.memorixToolsEndpoint) || DEFAULT_MEMORIX_CONFIG.memorixToolsEndpoint,
-    memorixToolsCallEndpoint:
-      localStorage.getItem(localStorageKey.memorixToolsCallEndpoint) || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
+    memorixToolsEndpoint: normalizeMemorixLocalEndpoint(
+      storedToolsEndpoint,
+      DEFAULT_MEMORIX_CONFIG.memorixToolsEndpoint,
+    ),
+    memorixToolsCallEndpoint: normalizeMemorixLocalEndpoint(
+      storedCallEndpoint,
+      DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
+    ),
+    memorixForwardToolsEndpoint: normalizeMemorixForwardEndpoint(storedToolsEndpoint),
+    memorixForwardToolsCallEndpoint: normalizeMemorixForwardEndpoint(storedCallEndpoint),
     memorixToolTimeoutMs: clampNumber(
       localStorage.getItem(localStorageKey.memorixToolTimeoutMs),
       DEFAULT_MEMORIX_CONFIG.memorixToolTimeoutMs,
@@ -158,7 +196,7 @@ function buildLocalProxyUrl(
     memorixAgentId: string
     memorixToolTimeoutMs: number
     memorixMaxRetries: number
-    forwardEndpoint: string
+    forwardEndpoint?: string
     toolName?: string
   },
 ): string {
@@ -167,7 +205,9 @@ function buildLocalProxyUrl(
   base.searchParams.set('agentId', params.memorixAgentId)
   base.searchParams.set('memorixToolTimeoutMs', String(params.memorixToolTimeoutMs))
   base.searchParams.set('memorixMaxRetries', String(params.memorixMaxRetries))
-  base.searchParams.set('forwardEndpoint', params.forwardEndpoint)
+  if (params.forwardEndpoint) {
+    base.searchParams.set('forwardEndpoint', params.forwardEndpoint)
+  }
   if (params.toolName) {
     base.searchParams.set('toolName', params.toolName)
   }
@@ -181,7 +221,7 @@ export async function getMemorixToolDescriptors(config: MemorixToolsConfig): Pro
       memorixAgentId: config.memorixAgentId || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
       memorixToolTimeoutMs: config.memorixToolTimeoutMs || DEFAULT_MEMORIX_CONFIG.memorixToolTimeoutMs,
       memorixMaxRetries: config.memorixMaxRetries || DEFAULT_MEMORIX_CONFIG.memorixMaxRetries,
-      forwardEndpoint: config.memorixToolsEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsEndpoint,
+      forwardEndpoint: config.memorixForwardToolsEndpoint,
     }),
   )
   const response = await fetchJsonWithRetry(
@@ -214,7 +254,7 @@ export async function invokeMemorixTool(
       memorixAgentId: config.memorixAgentId || DEFAULT_MEMORIX_CONFIG.memorixAgentId,
       memorixToolTimeoutMs: config.memorixToolTimeoutMs || DEFAULT_MEMORIX_CONFIG.memorixToolTimeoutMs,
       memorixMaxRetries: config.memorixMaxRetries || DEFAULT_MEMORIX_CONFIG.memorixMaxRetries,
-      forwardEndpoint: config.memorixToolsCallEndpoint || DEFAULT_MEMORIX_CONFIG.memorixToolsCallEndpoint,
+      forwardEndpoint: config.memorixForwardToolsCallEndpoint,
       toolName,
     },
   )

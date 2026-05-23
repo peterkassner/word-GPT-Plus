@@ -44,6 +44,7 @@ export interface OllamaOptions extends BaseChatCompletionOptions {
   provider: 'ollama'
   ollamaModel: string
   ollamaEndpoint?: string
+  proxy?: ProxyOptions
 }
 
 export interface GroqOptions extends BaseChatCompletionOptions {
@@ -57,6 +58,7 @@ export interface GeminiOptions extends BaseChatCompletionOptions {
   provider: 'gemini'
   geminiModel?: string
   geminiAPIKey: string
+  proxy?: ProxyOptions
 }
 
 export interface AzureOptions extends BaseChatCompletionOptions {
@@ -65,9 +67,16 @@ export interface AzureOptions extends BaseChatCompletionOptions {
   azureAPIEndpoint: string
   azureDeploymentName: string
   azureAPIVersion?: string
+  proxy?: ProxyOptions
 }
 
-export type ProviderOptions = OpenAIOptions | OpenRouterOptions | OllamaOptions | GroqOptions | GeminiOptions | AzureOptions
+export type ProviderOptions =
+  | OpenAIOptions
+  | OpenRouterOptions
+  | OllamaOptions
+  | GroqOptions
+  | GeminiOptions
+  | AzureOptions
 
 type supportedProviders = 'official' | 'openrouter' | 'ollama' | 'groq' | 'gemini' | 'azure'
 // Agent options with tools support

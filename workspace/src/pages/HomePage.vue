@@ -677,17 +677,14 @@ const flushTelemetryQueue = async (): Promise<void> => {
   }
 }
 
-const summarizeTelemetryText = (value: string, maxLength = 1200): string => {
+const summarizeTelemetryText = (value: string): string => {
   if (!value) return ''
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  if (normalized.length <= maxLength) return normalized
-  return `${normalized.slice(0, maxLength)}...[truncated]`
+  return value
 }
 
-const summarizeTelemetryPayload = (payload: unknown, maxLength = 1200): string => {
+const summarizeTelemetryPayload = (payload: unknown): string => {
   try {
-    const text = typeof payload === 'string' ? payload : JSON.stringify(payload)
-    return summarizeTelemetryText(text, maxLength)
+    return typeof payload === 'string' ? payload : JSON.stringify(payload)
   } catch {
     return '[unserializable]'
   }
@@ -803,7 +800,7 @@ const addAgentToolCall = (
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: toolName,
     status: 'running',
-    argsPreview: summarizeTelemetryPayload(args, 800),
+    argsPreview: summarizeTelemetryPayload(args),
     resultPreview: '',
     isMemorixTool,
     isQdrantTool,
@@ -821,7 +818,7 @@ const completeAgentToolCall = (toolName: string, result: string, status: AgentTo
   agentToolCalls.value[actualIndex] = {
     ...agentToolCalls.value[actualIndex],
     status,
-    resultPreview: summarizeTelemetryText(result || '', 1000),
+    resultPreview: summarizeTelemetryText(result || ''),
   }
 }
 
@@ -831,7 +828,7 @@ const failActiveToolCalls = (message = 'Tool call did not finish') => {
       ? {
           ...item,
           status: 'failed',
-          resultPreview: summarizeTelemetryText(message, 500),
+          resultPreview: summarizeTelemetryText(message),
         }
       : item,
   )
@@ -886,9 +883,7 @@ const getCustomModels = (key: string, oldKey: string): string[] => {
   return []
 }
 
-const currentModelProvider = computed(() =>
-  settingForm.value.api === 'openrouter' ? 'official' : settingForm.value.api,
-)
+const currentModelProvider = computed(() => settingForm.value.api)
 const currentModelSourceProvider = computed(() => settingForm.value.api)
 const remoteModelOptions = ref<Record<string, string[]>>({})
 
@@ -923,7 +918,7 @@ const resolveModelEndpoint = (apiProvider: 'official' | 'openrouter') => {
   }
 
   if (apiProvider === 'openrouter') {
-    return `${(settingForm.value.officialBasePath || 'https://openrouter.ai/api/v1').replace(/\/+$/, '')}/models`
+    return `${(settingForm.value.openrouterBasePath || 'https://openrouter.ai/api/v1').replace(/\/+$/, '')}/models`
   }
 
   return `${(settingForm.value.officialBasePath || 'https://api.openai.com/v1').replace(/\/+$/, '')}/models`
@@ -932,8 +927,12 @@ const resolveModelEndpoint = (apiProvider: 'official' | 'openrouter') => {
 let modelAbortController: AbortController | null = null
 const fetchModelList = async (apiProvider: 'official' | 'openrouter') => {
   const cacheKey = apiProvider
-  const apiKey = (settingForm.value.officialAPIKey || '').trim()
-  if (!apiKey) {
+  const apiKey =
+    apiProvider === 'openrouter'
+      ? (settingForm.value.openrouterAPIKey || '').trim()
+      : (settingForm.value.officialAPIKey || '').trim()
+
+  if (apiProvider === 'official' && !apiKey) {
     remoteModelOptions.value[cacheKey] = []
     return
   }
@@ -946,10 +945,13 @@ const fetchModelList = async (apiProvider: 'official' | 'openrouter') => {
   modelAbortController = controller
 
   try {
+    const headers: Record<string, string> = {}
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
+
     const response = await fetch(resolveModelEndpoint(apiProvider), {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       signal: controller.signal,
     })
 
@@ -977,6 +979,10 @@ const currentModelOptions = computed(() => {
     case 'official':
       presetOptions = settingPreset.officialModelSelect.optionList || []
       customModels = getCustomModels('customModels', 'customModel')
+      break
+    case 'openrouter':
+      presetOptions = settingPreset.openrouterModelSelect.optionList || []
+      customModels = getCustomModels('openrouterCustomModels', 'openrouterCustomModel')
       break
     case 'gemini':
       presetOptions = settingPreset.geminiModelSelect.optionList || []
@@ -1014,6 +1020,8 @@ const currentModelSelect = computed({
     switch (currentModelProvider.value) {
       case 'official':
         return settingForm.value.officialModelSelect
+      case 'openrouter':
+        return settingForm.value.openrouterModelSelect
       case 'gemini':
         return settingForm.value.geminiModelSelect
       case 'ollama':
@@ -1031,6 +1039,10 @@ const currentModelSelect = computed({
       case 'official':
         settingForm.value.officialModelSelect = value
         localStorage.setItem(localStorageKey.model, value)
+        break
+      case 'openrouter':
+        settingForm.value.openrouterModelSelect = value
+        localStorage.setItem(localStorageKey.openrouterModel, value)
         break
       case 'gemini':
         settingForm.value.geminiModelSelect = value
@@ -1068,22 +1080,40 @@ watch(
 watch(
   () => settingForm.value.officialAPIKey,
   async () => {
-    const provider = currentModelSourceProvider.value
-    if (provider === 'official' || provider === 'openrouter') {
-      await fetchModelList(provider)
+    if (currentModelSourceProvider.value === 'official') {
+      await fetchModelList('official')
+      await syncCurrentModelSelection()
     }
-    await syncCurrentModelSelection()
   },
 )
 
 watch(
   () => settingForm.value.officialBasePath,
   async () => {
-    const provider = currentModelSourceProvider.value
-    if (provider === 'official' || provider === 'openrouter') {
-      await fetchModelList(provider)
+    if (currentModelSourceProvider.value === 'official') {
+      await fetchModelList('official')
+      await syncCurrentModelSelection()
     }
-    await syncCurrentModelSelection()
+  },
+)
+
+watch(
+  () => settingForm.value.openrouterAPIKey,
+  async () => {
+    if (currentModelSourceProvider.value === 'openrouter') {
+      await fetchModelList('openrouter')
+      await syncCurrentModelSelection()
+    }
+  },
+)
+
+watch(
+  () => settingForm.value.openrouterBasePath,
+  async () => {
+    if (currentModelSourceProvider.value === 'openrouter') {
+      await fetchModelList('openrouter')
+      await syncCurrentModelSelection()
+    }
   },
 )
 
@@ -1305,7 +1335,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       mode: 'agent',
       threadId: threadId.value,
       userInputLength: userInputText.length,
-      userInputPreview: summarizeTelemetryText(userInputText, 1600),
+      userInputPreview: summarizeTelemetryText(userInputText),
       selectedPromptId: selectedPromptId.value || null,
       provider,
       model: currentModelSelect.value,
@@ -1316,7 +1346,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       mode: 'chat',
       threadId: threadId.value,
       userInputLength: userInputText.length,
-      userInputPreview: summarizeTelemetryText(userInputText, 1600),
+      userInputPreview: summarizeTelemetryText(userInputText),
       selectedPromptId: selectedPromptId.value || null,
       provider,
       model: currentModelSelect.value,
@@ -1343,7 +1373,18 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
   }
   const providerConfigs: Record<string, any> = {
     official: officialProviderConfig,
-    openrouter: { ...officialProviderConfig, provider: 'openrouter' },
+    openrouter: {
+      provider: 'openrouter',
+      config: {
+        apiKey: settings.openrouterAPIKey,
+        baseURL: settings.openrouterBasePath,
+        dangerouslyAllowBrowser: true,
+      },
+      proxy: getProxyConfig(),
+      maxTokens: settings.openrouterMaxTokens,
+      temperature: settings.openrouterTemperature,
+      model: settings.openrouterModelSelect,
+    },
     groq: {
       provider: 'groq',
       groqAPIKey: settings.groqAPIKey,
@@ -1358,6 +1399,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       azureAPIEndpoint: settings.azureAPIEndpoint,
       azureDeploymentName: settings.azureDeploymentName,
       azureAPIVersion: settings.azureAPIVersion,
+      proxy: getProxyConfig(),
       maxTokens: settings.azureMaxTokens,
       temperature: settings.azureTemperature,
     },
@@ -1367,12 +1409,14 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       maxTokens: settings.geminiMaxTokens,
       temperature: settings.geminiTemperature,
       geminiModel: settings.geminiModelSelect,
+      proxy: getProxyConfig(),
     },
     ollama: {
       provider: 'ollama',
       ollamaEndpoint: settings.ollamaEndpoint,
       ollamaModel: settings.ollamaModelSelect,
       temperature: settings.ollamaTemperature,
+      proxy: getProxyConfig(),
     },
   }
 
@@ -1431,7 +1475,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
           type: 'agent.tool.result',
           toolName,
           toolResultLength: _result?.length || 0,
-          toolResultPreview: summarizeTelemetryText(_result || '', 1600),
+          toolResultPreview: summarizeTelemetryText(_result || ''),
           isMemorixTool,
           isQdrantTool,
           isDocSuiteTool,
@@ -1460,7 +1504,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
             turnId: event.turnId,
             threadId: threadId.value,
             outputLength: outputText.length,
-            outputPreview: summarizeTelemetryText(outputText, 2000),
+            outputPreview: summarizeTelemetryText(outputText),
           })
         }
         if (event.type === 'agent.turn.complete' || event.type === 'agent.error') {
@@ -1499,7 +1543,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         provider,
         model: currentModelSelect.value,
         outputLength: outputText.length,
-        outputPreview: summarizeTelemetryText(outputText, 2000),
+        outputPreview: summarizeTelemetryText(outputText),
       })
       flushTelemetryQueue().catch(() => {
         console.error('[Telemetry] flush failed')
@@ -1552,6 +1596,7 @@ function checkApiKey() {
   const auth = {
     type: settingForm.value.api as supportedPlatforms,
     apiKey: settingForm.value.officialAPIKey,
+    openrouterAPIKey: settingForm.value.openrouterAPIKey,
     azureAPIKey: settingForm.value.azureAPIKey,
     geminiAPIKey: settingForm.value.geminiAPIKey,
     groqAPIKey: settingForm.value.groqAPIKey,

@@ -68,6 +68,19 @@ export const availableModels: string[] = [
   'o3',
 ]
 
+// OpenRouter - populated from API at runtime, these are fallback defaults
+export const availableModelsForOpenRouter: string[] = [
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-opus-4',
+  'openai/gpt-5',
+  'openai/gpt-4.1',
+  'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'meta-llama/llama-4-maverick',
+  'deepseek/deepseek-r1',
+  'qwen/qwen3-235b-a22b',
+]
+
 // Gemini API 可用的模型
 export const availableModelsForGemini: string[] = [
   'gemini-3-pro-preview',

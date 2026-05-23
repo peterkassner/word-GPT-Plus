@@ -1,7 +1,13 @@
 import { i18n } from '@/i18n'
 
 import { forceNumber, optionLists } from './common'
-import { availableModels, availableModelsForGemini, availableModelsForGroq, availableModelsForOllama } from './constant'
+import {
+  availableModels,
+  availableModelsForGemini,
+  availableModelsForGroq,
+  availableModelsForOllama,
+  availableModelsForOpenRouter,
+} from './constant'
 import { localStorageKey } from './enum'
 import { resolveProxyBase } from './proxyResolver'
 
@@ -55,6 +61,13 @@ export const Setting_Names = [
   'azureTemperature',
   'azureMaxTokens',
   'azureAPIVersion',
+  'openrouterAPIKey',
+  'openrouterBasePath',
+  'openrouterCustomModel',
+  'openrouterCustomModels',
+  'openrouterTemperature',
+  'openrouterMaxTokens',
+  'openrouterModelSelect',
   'enableMemorixTools',
   'mcpProxyHubUrl',
   'memorixAgentId',
@@ -207,6 +220,13 @@ export const settingPreset = {
   azureTemperature: inputNumSetting(0.7, 'azureTemperature', 'temperature'),
   azureMaxTokens: inputNumSetting(800, 'azureMaxTokens', 'maxTokens'),
   azureAPIVersion: inputSetting(''),
+  openrouterAPIKey: inputSetting('', 'openrouterAPIKey'),
+  openrouterBasePath: inputSetting('', 'openrouterBasePath'),
+  openrouterCustomModel: inputSetting('', 'openrouterCustomModel'),
+  openrouterCustomModels: customModelsetting('openrouterCustomModels', 'openrouterCustomModel'),
+  openrouterTemperature: inputNumSetting(0.7, 'openrouterTemperature', 'temperature'),
+  openrouterMaxTokens: inputNumSetting(800, 'openrouterMaxTokens', 'maxTokens'),
+  openrouterModelSelect: selectSetting('anthropic/claude-sonnet-4', 'openrouterModel', availableModelsForOpenRouter),
   enableMemorixTools: {
     defaultValue: false,
     saveKey: 'enableMemorixTools',
