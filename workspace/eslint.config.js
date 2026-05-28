@@ -141,7 +141,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['*.config.js', '.stylelintrc.cjs', '.*rc.js'],
+    files: ['*.config.js', '.stylelintrc.cjs', '.*rc.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,

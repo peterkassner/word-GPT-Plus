@@ -10,7 +10,15 @@ function looksLikeJson(value: string): boolean {
   if (!trimmed) return false
 
   const first = trimmed[0]
-  return first === '{' || first === '[' || first === '"' || first === 't' || first === 'f' || first === 'n' || /^\d/.test(first)
+  return (
+    first === '{' ||
+    first === '[' ||
+    first === '"' ||
+    first === 't' ||
+    first === 'f' ||
+    first === 'n' ||
+    /^\d/.test(first)
+  )
 }
 
 function toErrorString(error: unknown): string {
@@ -33,7 +41,9 @@ function parseJsonResponseBody(url: string, responseText: string, contentType: s
   const isJsonContentType = !!contentType && contentType.toLowerCase().includes('application/json')
 
   if (!isJsonContentType && !isJsonLike) {
-    throw new Error(`Invalid JSON response from ${url}: unexpected content-type "${contentType || 'unknown'}"; body starts "${trimmed.slice(0, 80)}"`)
+    throw new Error(
+      `Invalid JSON response from ${url}: unexpected content-type "${contentType || 'unknown'}"; body starts "${trimmed.slice(0, 80)}"`,
+    )
   }
 
   try {

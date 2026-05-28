@@ -7,6 +7,8 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "dev:lan": "yarn generate:manifest:lan && yarn dev",
     "generate:manifest:lan": "node scripts/generate-lan-manifest.mjs",
+    "bump:manifest:id": "node scripts/bump-manifest-id.mjs",
+    "prebuild": "node scripts/bump-manifest-id.mjs",
     "serve:lan": "vite preview --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "serve": "vite preview --port 3000",

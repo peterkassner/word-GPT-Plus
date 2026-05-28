@@ -92,7 +92,7 @@ onMounted(() => {
   line-height: 1.4;
   flex: 1;
   font-weight: 500;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .toast-progress {

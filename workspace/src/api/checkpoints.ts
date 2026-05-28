@@ -1,8 +1,10 @@
 import type { RunnableConfig } from '@langchain/core/runnables'
 import { BaseCheckpointSaver, Checkpoint, CheckpointMetadata, type CheckpointTuple } from '@langchain/langgraph'
-export type { CheckpointTuple }
 import Dexie, { Table } from 'dexie'
+
 import { createUUID } from '@/utils/uuid'
+
+export type { CheckpointTuple }
 
 export interface Thread {
   id: string

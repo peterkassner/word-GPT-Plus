@@ -1,9 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
 import { resolve } from 'node:path'
+import { replaceManifestId } from './manifest-id.mjs'
+import { DEFAULT_MANIFESTS, MANIFEST_STAMP, resolveFromWorkspace } from './manifest-paths.mjs'
 
 const ADDIN_TITLE_MARKER = 'Word GPT Plus'
-const DEFAULT_OUTPUTS = ['release/self-hosted/manifest.lan.xml', 'release/self-hosted/manifest.xml']
+const DEFAULT_OUTPUTS = DEFAULT_MANIFESTS
 
 function parseArgs(argv) {
   const options = {
@@ -58,10 +61,7 @@ function getPreferPrivateIp() {
       const ip = iface.address
       if (!ip) continue
 
-      const isPrivate =
-        ip.startsWith('10.') ||
-        ip.startsWith('192.168.') ||
-        /^(172\.(1[6-9]|2\d|3[01]))\./.test(ip)
+      const isPrivate = ip.startsWith('10.') || ip.startsWith('192.168.') || /^(172\.(1[6-9]|2\d|3[01]))\./.test(ip)
 
       if (isPrivate) {
         privateCandidates.push(ip)
@@ -122,13 +122,18 @@ const options = parseArgs(process.argv.slice(2))
 const host = options.host || getPreferPrivateIp()
 const templatePath = resolve(process.cwd(), options.template)
 const port = await detectAddinPort(host, options.port)
-const rendered = renderManifest(templatePath, host, port)
+const manifestId = randomUUID()
+const rendered = replaceManifestId(renderManifest(templatePath, host, port), manifestId)
 const outputPaths = (options.output ? [options.output] : DEFAULT_OUTPUTS).map(path => resolve(process.cwd(), path))
+const stampPath = resolveFromWorkspace(MANIFEST_STAMP)
 
 for (const outputPath of outputPaths) {
   writeFileSync(outputPath, `${rendered}\n`)
   console.log(`Generated LAN manifest: ${outputPath}`)
 }
+
+writeFileSync(stampPath, `${manifestId} ${new Date().toISOString()}\n`)
+console.log(`Office add-in Id stamp: ${stampPath}`)
 
 console.log(`LAN host: ${host}`)
 console.log(`Add-in UI port: ${port}`)

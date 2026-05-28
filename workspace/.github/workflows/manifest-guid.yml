@@ -1,0 +1,51 @@
+name: Manifest GUID gate
+
+on:
+  push:
+    paths:
+      - 'workspace/src/**'
+      - 'workspace/proxy-server/**'
+      - 'workspace/public/**'
+      - 'workspace/package.json'
+      - 'workspace/vite.config.*'
+      - 'workspace/Dockerfile'
+      - 'workspace/docker-compose*.yml'
+      - 'workspace/release/self-hosted/**'
+      - 'references/gg-laptop-docx-runtime-apps/**'
+      - 'workspace/scripts/bump-manifest-id.mjs'
+      - 'workspace/scripts/manifest-id.mjs'
+      - 'workspace/scripts/generate-lan-manifest.mjs'
+      - 'workspace/.github/workflows/manifest-guid.yml'
+  pull_request:
+    paths:
+      - 'workspace/src/**'
+      - 'workspace/proxy-server/**'
+      - 'workspace/public/**'
+      - 'workspace/package.json'
+      - 'workspace/vite.config.*'
+      - 'workspace/Dockerfile'
+      - 'workspace/docker-compose*.yml'
+      - 'workspace/release/self-hosted/**'
+      - 'references/gg-laptop-docx-runtime-apps/**'
+      - 'workspace/scripts/bump-manifest-id.mjs'
+      - 'workspace/scripts/manifest-id.mjs'
+      - 'workspace/scripts/generate-lan-manifest.mjs'
+      - 'workspace/.github/workflows/manifest-guid.yml'
+
+defaults:
+  run:
+    working-directory: workspace
+
+jobs:
+  require-manifest-id-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify Office add-in Id changed with code
+        env:
+          MANIFEST_ID_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before == '0000000000000000000000000000000000000000' && 'origin/main' || github.event.before) }}
+        run: node scripts/bump-manifest-id.mjs --check
