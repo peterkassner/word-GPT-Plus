@@ -123,19 +123,19 @@ Choose the method that best suits your needs:
 
    ```bash
    docker pull kuingsmile/word-gpt-plus
-   docker run -d -p 3000:80 kuingsmile/word-gpt-plus
+   docker run -d -p 3232:80 -p 3100:3100 -v "$(pwd)/word-gpt-plus-logs:/app/data/logs" kuingsmile/word-gpt-plus
    ```
 
-2. For host-visible, persisted stream logs, use compose:
+2. For host-visible, persisted stream logs, use compose (UI on **3232**, proxy on **3100**, single container):
 
    ```bash
    mkdir -p word-gpt-plus-logs
-   docker compose up --build
+   docker compose up --build -d
    ```
 
-  Logs will be written under `./word-gpt-plus-logs`.
+   Logs are written under `./word-gpt-plus-logs`.
 
-   Then in the Word add-in settings, enable proxy and set proxy URL to `http://<PC_IP>:3100`.
+   In Word add-in settings, enable proxy and set proxy URL to `http://<PC_IP>:3100`.
 
 3. Regenerate the self-hosted manifest to match your current LAN IP and sideload it:
 

@@ -1,3 +1,4 @@
+# Standalone proxy image (optional). Production uses the combined image in ../Dockerfile.
 FROM node:22-alpine
 
 WORKDIR /app

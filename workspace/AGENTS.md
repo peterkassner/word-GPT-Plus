@@ -58,10 +58,10 @@ Run the proxy server (for API forwarding):
 cd workspace/proxy-server && node server.js
 ```
 
-Run Docker service stack (frontend + proxy):
+Run Docker stack (nginx UI + Node proxy in one container; ports 3232 and 3100):
 
 ```bash
-cd workspace && docker compose up --build
+cd workspace && docker compose up --build -d
 ```
 
 ## Testing and validation
