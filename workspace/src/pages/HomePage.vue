@@ -372,7 +372,7 @@ import {
   flushTelemetryQueueToProxy,
   GeneralToolName,
 } from '@/utils/generalTools'
-import { createMemorixTools, getMemorixToolsConfigFromStorage } from '@/utils/memorixTools'
+import { createHindsightTools, getHindsightToolsConfigFromStorage } from '@/utils/hindsightTools'
 import { message as messageUtil } from '@/utils/message'
 import { resolveProxyBase } from '@/utils/proxyResolver'
 import { createQdrantResourcesTools, getQdrantToolsConfigFromStorage } from '@/utils/qdrantResourcesTools'
@@ -480,7 +480,7 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
   const allTools = [...generalTools, ...wordTools]
   const docSuiteContext = await getDocSuiteContext()
 
-  const memorixConfig = getMemorixToolsConfigFromStorage({
+  const hindsightConfig = getHindsightToolsConfigFromStorage({
     threadId: threadId.value || undefined,
   })
   const qdrantConfig = getQdrantToolsConfigFromStorage({
@@ -488,23 +488,23 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
   })
   const docSuiteConfig = getDocSuiteToolsConfigFromStorage(docSuiteContext)
 
-  memorixToolNames.value = new Set()
+  hindsightToolNames.value = new Set()
   qdrantToolNames.value = new Set()
   docSuiteToolNames.value = new Set()
-  currentMemorixAgentId.value = memorixConfig.memorixAgentId || 'word-gpt-plus'
+  currentHindsightAgentId.value = hindsightConfig.hindsightMemoryBankId || 'word-gpt-plus'
   currentQdrantAgentId.value = qdrantConfig.qdrantResourcesAgentId || 'word-gpt-plus'
   currentDocSuiteAgentId.value = docSuiteConfig.docSuiteAgentId || 'word-gpt-plus'
 
-  if (memorixConfig.enableMemorixTools) {
+  if (hindsightConfig.enableHindsightTools) {
     try {
-      const memorixTools = await createMemorixTools(memorixConfig)
-      memorixToolNames.value = new Set(memorixTools.map(tool => tool.name))
-      allTools.push(...memorixTools)
+      const hindsightTools = await createHindsightTools(hindsightConfig)
+      hindsightToolNames.value = new Set(hindsightTools.map(tool => tool.name))
+      allTools.push(...hindsightTools)
     } catch (error) {
-      console.error('[Memorix] Failed to load tools', error)
-      logToolDiscoveryFailure('memorix', error)
-      messageUtil.error('Memorix tool discovery failed')
-      memorixToolNames.value = new Set()
+      console.error('[Hindsight] Failed to load tools', error)
+      logToolDiscoveryFailure('hindsight', error)
+      messageUtil.error('Hindsight tool discovery failed')
+      hindsightToolNames.value = new Set()
     }
   }
 
@@ -635,7 +635,7 @@ interface AgentToolCallUiItem {
   status: AgentToolCallStatus
   argsPreview: string
   resultPreview: string
-  isMemorixTool: boolean
+  isHindsightTool: boolean
   isQdrantTool: boolean
   isDocSuiteTool: boolean
 }
@@ -653,10 +653,10 @@ const insertType = ref<insertTypes>('replace')
 
 const errorIssue = ref<boolean | string | null>(false)
 const telemetryEnabled = ref(localStorage.getItem(localStorageKey.telemetryEnabled) !== 'false')
-const memorixToolNames = ref<Set<string>>(new Set())
+const hindsightToolNames = ref<Set<string>>(new Set())
 const qdrantToolNames = ref<Set<string>>(new Set())
 const docSuiteToolNames = ref<Set<string>>(new Set())
-const currentMemorixAgentId = ref('word-gpt-plus')
+const currentHindsightAgentId = ref('word-gpt-plus')
 const currentQdrantAgentId = ref('word-gpt-plus')
 const currentDocSuiteAgentId = ref('word-gpt-plus')
 
@@ -695,13 +695,11 @@ const migrateLegacy3232Endpoints = () => {
 
   const keysToMigrate: string[] = [
     localStorageKey.proxy,
-    localStorageKey.mcpProxyHubUrl,
-    localStorageKey.memorixToolsEndpoint,
-    localStorageKey.memorixToolsCallEndpoint,
     localStorageKey.qdrantResourcesToolsEndpoint,
     localStorageKey.qdrantResourcesToolsCallEndpoint,
     localStorageKey.docSuiteToolsEndpoint,
     localStorageKey.docSuiteToolsCallEndpoint,
+    localStorageKey.hindsightBaseUrl,
   ]
 
   const normalize = (raw: string): string => {
@@ -792,7 +790,7 @@ const resetAgentToolCalls = () => {
 const addAgentToolCall = (
   toolName: string,
   args: unknown,
-  isMemorixTool: boolean,
+  isHindsightTool: boolean,
   isQdrantTool: boolean,
   isDocSuiteTool: boolean,
 ) => {
@@ -802,7 +800,7 @@ const addAgentToolCall = (
     status: 'running',
     argsPreview: summarizeTelemetryPayload(args),
     resultPreview: '',
-    isMemorixTool,
+    isHindsightTool,
     isQdrantTool,
     isDocSuiteTool,
   })
@@ -1449,18 +1447,18 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
         scrollToBottom()
       },
       onToolCall: (toolName: string, _args: any) => {
-        const isMemorixTool = memorixToolNames.value.has(toolName)
+        const isHindsightTool = hindsightToolNames.value.has(toolName)
         const isQdrantTool = qdrantToolNames.value.has(toolName)
         const isDocSuiteTool = docSuiteToolNames.value.has(toolName)
-        addAgentToolCall(toolName, _args, isMemorixTool, isQdrantTool, isDocSuiteTool)
+        addAgentToolCall(toolName, _args, isHindsightTool, isQdrantTool, isDocSuiteTool)
         enqueueTelemetryEvent({
           type: 'agent.tool.call',
           toolName,
           toolArgsPreview: summarizeTelemetryPayload(_args),
-          isMemorixTool,
+          isHindsightTool,
           isQdrantTool,
           isDocSuiteTool,
-          memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+          hindsightAgentId: isHindsightTool ? currentHindsightAgentId.value : undefined,
           qdrantAgentId: isQdrantTool ? currentQdrantAgentId.value : undefined,
           docSuiteAgentId: isDocSuiteTool ? currentDocSuiteAgentId.value : undefined,
         })
@@ -1468,7 +1466,7 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       },
       onToolResult: (toolName: string, _result: string) => {
         completeAgentToolCall(toolName, _result, 'completed')
-        const isMemorixTool = memorixToolNames.value.has(toolName)
+        const isHindsightTool = hindsightToolNames.value.has(toolName)
         const isQdrantTool = qdrantToolNames.value.has(toolName)
         const isDocSuiteTool = docSuiteToolNames.value.has(toolName)
         enqueueTelemetryEvent({
@@ -1476,10 +1474,10 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
           toolName,
           toolResultLength: _result?.length || 0,
           toolResultPreview: summarizeTelemetryText(_result || ''),
-          isMemorixTool,
+          isHindsightTool,
           isQdrantTool,
           isDocSuiteTool,
-          memorixAgentId: isMemorixTool ? currentMemorixAgentId.value : undefined,
+          hindsightAgentId: isHindsightTool ? currentHindsightAgentId.value : undefined,
           qdrantAgentId: isQdrantTool ? currentQdrantAgentId.value : undefined,
           docSuiteAgentId: isDocSuiteTool ? currentDocSuiteAgentId.value : undefined,
         })

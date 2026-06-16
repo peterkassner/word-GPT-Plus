@@ -9,7 +9,6 @@ import {
   availableModelsForOpenRouter,
 } from './constant'
 import { localStorageKey } from './enum'
-import { resolveProxyBase } from './proxyResolver'
 
 type componentType = 'input' | 'select' | 'inputNum'
 
@@ -68,13 +67,12 @@ export const Setting_Names = [
   'openrouterTemperature',
   'openrouterMaxTokens',
   'openrouterModelSelect',
-  'enableMemorixTools',
-  'mcpProxyHubUrl',
-  'memorixAgentId',
-  'memorixToolsEndpoint',
-  'memorixToolsCallEndpoint',
-  'memorixToolTimeoutMs',
-  'memorixMaxRetries',
+  'enableHindsightTools',
+  'hindsightBaseUrl',
+  'hindsightMemoryBankId',
+  'hindsightApiKey',
+  'hindsightToolTimeoutMs',
+  'hindsightMaxRetries',
   'enableQdrantResourcesTools',
   'qdrantResourcesAgentId',
   'qdrantResourcesToolsEndpoint',
@@ -161,32 +159,6 @@ const customModelsetting = (saveKey: keyOfLocalStorageKey, oldKey: keyOfLocalSto
   saveFunc: (value: string[]) => saveCustomModels(localStorageKey[saveKey], value),
 })
 
-const LEGACY_MCP_PROXY_HUB_URLS = new Set([
-  'http://localhost:3100',
-  'https://localhost:3100',
-  'http://127.0.0.1:3100',
-  'https://127.0.0.1:3100',
-  'http://127.0.0.1:9999',
-  'https://127.0.0.1:9999',
-  '127.0.0.1:9999',
-  'localhost:9999',
-  'localhost:3100',
-  '127.0.0.1:3100',
-])
-
-const getMcpProxyHubUrl = () => {
-  const defaultValue = resolveProxyBase('http://127.0.0.1:8096')
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return defaultValue
-  const saved = localStorage.getItem(localStorageKey.mcpProxyHubUrl)?.trim()
-  if (!saved) return defaultValue
-  const normalizedSaved = saved.replace(/\/+$/, '')
-  if (LEGACY_MCP_PROXY_HUB_URLS.has(normalizedSaved)) {
-    localStorage.setItem(localStorageKey.mcpProxyHubUrl, defaultValue)
-    return defaultValue
-  }
-  return saved
-}
-
 export const settingPreset = {
   api: {
     ...inputSetting('official'),
@@ -227,24 +199,17 @@ export const settingPreset = {
   openrouterTemperature: inputNumSetting(0.7, 'openrouterTemperature', 'temperature'),
   openrouterMaxTokens: inputNumSetting(800, 'openrouterMaxTokens', 'maxTokens'),
   openrouterModelSelect: selectSetting('anthropic/claude-sonnet-4', 'openrouterModel', availableModelsForOpenRouter),
-  enableMemorixTools: {
+  enableHindsightTools: {
     defaultValue: false,
-    saveKey: 'enableMemorixTools',
-    getFunc: () => localStorage.getItem(localStorageKey.enableMemorixTools) === 'true',
-    saveFunc: value => localStorage.setItem(localStorageKey.enableMemorixTools, String(value)),
+    saveKey: 'enableHindsightTools',
+    getFunc: () => localStorage.getItem(localStorageKey.enableHindsightTools) === 'true',
+    saveFunc: value => localStorage.setItem(localStorageKey.enableHindsightTools, String(value)),
   },
-  mcpProxyHubUrl: {
-    type: 'input',
-    defaultValue: resolveProxyBase('http://127.0.0.1:8096'),
-    saveKey: 'mcpProxyHubUrl',
-    getFunc: () => getMcpProxyHubUrl(),
-    saveFunc: (value: string) => localStorage.setItem(localStorageKey.mcpProxyHubUrl, String(value)),
-  },
-  memorixAgentId: inputSetting('word-gpt-plus', 'memorixAgentId'),
-  memorixToolsEndpoint: inputSetting('/api/tools/memorix', 'memorixToolsEndpoint'),
-  memorixToolsCallEndpoint: inputSetting('/api/tools/memorix/call', 'memorixToolsCallEndpoint'),
-  memorixToolTimeoutMs: inputNumSetting(12000, 'memorixToolTimeoutMs', 'maxTokens'),
-  memorixMaxRetries: inputNumSetting(2, 'memorixMaxRetries', 'maxTokens'),
+  hindsightBaseUrl: inputSetting('http://127.0.0.1:8888', 'hindsightBaseUrl'),
+  hindsightMemoryBankId: inputSetting('word-gpt-plus', 'hindsightMemoryBankId'),
+  hindsightApiKey: inputSetting('', 'hindsightApiKey'),
+  hindsightToolTimeoutMs: inputNumSetting(12000, 'hindsightToolTimeoutMs', 'maxTokens'),
+  hindsightMaxRetries: inputNumSetting(2, 'hindsightMaxRetries', 'maxTokens'),
   enableQdrantResourcesTools: {
     defaultValue: false,
     saveKey: 'enableQdrantResourcesTools',

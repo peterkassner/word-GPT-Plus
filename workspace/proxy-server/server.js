@@ -10,10 +10,6 @@ import { URL } from 'node:url'
 const PORT = Number(process.env.PORT || 3100)
 const LOG_DIR = process.env.LOG_DIR || `${process.cwd()}/logs`
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*'
-const MEMORIX_DISCOVER_PATH = '/api/tools/memorix'
-const MEMORIX_CALL_PATH = '/api/tools/memorix/call'
-const MEMORIX_FORWARD_DISCOVER_PATH = '/servers/memorix/tools/list'
-const MEMORIX_FORWARD_CALL_PATH = '/servers/memorix/tools/call'
 const QDRANT_DISCOVER_PATH = '/api/tools/qdrant'
 const QDRANT_CALL_PATH = '/api/tools/qdrant/call'
 const QDRANT_FORWARD_DISCOVER_PATH = '/servers/Qdrant_Resources/tools/list'
@@ -114,12 +110,23 @@ function buildUpstreamHeaders(reqHeaders) {
   if (headers.host) {
     delete headers.host
   }
+  // Node's built-in fetch (undici) automatically decompresses compressed upstream
+  // responses, so forwarding the browser's Accept-Encoding causes a mismatch:
+  // the proxy streams already-decompressed bytes while the original Content-Encoding
+  // header is still forwarded to the browser, which then fails to decode the body
+  // (ERR_CONTENT_DECODING_FAILED). Remove it so upstream always returns plain bytes.
+  delete headers['accept-encoding']
   return headers
 }
 
 function copyResponseHeaders(upstreamRes, res) {
   upstreamRes.headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'content-length') {
+    const lk = key.toLowerCase()
+    // content-length is excluded because we may re-chunk the body.
+    // content-encoding and transfer-encoding must also be excluded: Node's
+    // undici fetch auto-decompresses the response body, so these headers are
+    // stale by the time we forward to the browser and cause decode errors.
+    if (lk === 'content-length' || lk === 'content-encoding' || lk === 'transfer-encoding') {
       return
     }
     res.setHeader(key, value)
@@ -148,158 +155,6 @@ async function resolveLogDir() {
       return '/tmp/word-gpt-plus-proxy-logs'
     }
   }
-}
-
-async function handleMemorixDiscover(req, res, logger, requestId) {
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
-  const config = getMemorixProxyConfig(req.url || '/')
-  const forwardEndpoint =
-    requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint || MEMORIX_FORWARD_DISCOVER_PATH
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
-  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
-  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
-    res.writeHead(500, {
-      'Access-Control-Allow-Origin': CORS_ORIGIN,
-      'Content-Type': 'application/json',
-    })
-    res.end(JSON.stringify({ error: 'Invalid memorix configuration: mcpProxyHubUrl points to the current proxy host' }))
-    return
-  }
-  const upstreamUrl = `${upstreamBase}${upstreamPath}`
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: config.agentId,
-    memorixToolTimeoutMs: String(config.timeoutMs),
-    memorixMaxRetries: String(config.maxRetries),
-  })
-
-  logger.write({
-    type: 'memorix.discover.start',
-    requestId,
-    upstream: targetUrl,
-    config,
-  })
-
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-    },
-    config.maxRetries,
-    config.timeoutMs,
-  )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
-    'Access-Control-Allow-Origin': CORS_ORIGIN,
-    'Content-Type': 'application/json',
-  })
-  logger.write({
-    type: 'memorix.discover.response',
-    requestId,
-    status: response.status,
-    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
-  })
-
-  if (!response.ok) {
-    res.end(JSON.stringify({ error: responseText || 'mcp discover failed', status: response.status }))
-    return
-  }
-
-  if (!responseText) {
-    res.end('[]')
-    return
-  }
-
-  try {
-    const parsed = JSON.parse(responseText)
-    const payload = Array.isArray(parsed) ? parsed : parsed.tools || parsed.toolDescriptors || []
-    res.end(JSON.stringify(payload))
-  } catch {
-    res.end(JSON.stringify({ error: 'invalid discover response', raw: responseText.slice(0, 4096) }))
-  }
-}
-
-async function handleMemorixCall(req, res, logger, requestId) {
-  const config = getMemorixProxyConfig(req.url || '/')
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
-  const forwardEndpoint =
-    requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint || MEMORIX_FORWARD_CALL_PATH
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
-  const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
-  if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
-    res.writeHead(500, {
-      'Access-Control-Allow-Origin': CORS_ORIGIN,
-      'Content-Type': 'application/json',
-    })
-    res.end(JSON.stringify({ error: 'Invalid memorix configuration: mcpProxyHubUrl points to the current proxy host' }))
-    return
-  }
-  const upstreamUrl = `${upstreamBase}${upstreamPath}`
-  const body = await getRequestBodyBody(req)
-  let parsedBody = {}
-  try {
-    parsedBody = body ? JSON.parse(body) : {}
-  } catch {
-    res.writeHead(400, {
-      'Access-Control-Allow-Origin': CORS_ORIGIN,
-      'Content-Type': 'application/json',
-    })
-    res.end(JSON.stringify({ error: 'Invalid JSON payload' }))
-    return
-  }
-  const payload = {
-    ...parsedBody,
-    agentId: parsedBody.agentId || config.agentId,
-  }
-
-  logger.write({
-    type: 'memorix.call.start',
-    requestId,
-    upstream: upstreamUrl,
-    toolName: payload.toolName || parsedBody.toolName || config.toolName || 'unknown',
-    requestIdFromClient: payload.requestId,
-  })
-
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: payload.agentId,
-    memorixToolTimeoutMs: String(config.timeoutMs),
-    memorixMaxRetries: String(config.maxRetries),
-  })
-
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    },
-    config.maxRetries,
-    config.timeoutMs,
-  )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
-    'Access-Control-Allow-Origin': CORS_ORIGIN,
-    'Content-Type': 'application/json',
-  })
-
-  logger.write({
-    type: 'memorix.call.response',
-    requestId,
-    status: response.status,
-    toolName: payload.toolName || parsedBody.toolName || config.toolName,
-    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
-  })
-
-  if (!responseText) {
-    res.end('{}')
-    return
-  }
-  res.end(responseText)
 }
 
 async function handleQdrantDiscover(req, res, logger, requestId) {
@@ -788,27 +643,6 @@ function parseNumeric(value, fallback) {
   return parsed
 }
 
-function getMemorixProxyConfig(reqUrl) {
-  const url = new URL(reqUrl, 'http://localhost')
-  return {
-    mcpProxyHubUrl:
-      url.searchParams.get('mcpProxyHubUrl') || process.env.MEMORIX_PROXY_HUB_URL || 'http://localhost:8096',
-    agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
-    toolEndpoint:
-      url.searchParams.get('memorixToolsEndpoint') ||
-      url.searchParams.get('forwardEndpoint') ||
-      process.env.MEMORIX_TOOLS_ENDPOINT ||
-      MEMORIX_FORWARD_DISCOVER_PATH,
-    callEndpoint:
-      url.searchParams.get('memorixToolsCallEndpoint') ||
-      process.env.MEMORIX_TOOLS_CALL_ENDPOINT ||
-      MEMORIX_FORWARD_CALL_PATH,
-    timeoutMs: parseNumeric(url.searchParams.get('memorixToolTimeoutMs'), 12000),
-    maxRetries: parseNumeric(url.searchParams.get('memorixMaxRetries'), 2),
-    toolName: url.searchParams.get('toolName') || '',
-  }
-}
-
 function getQdrantProxyConfig(reqUrl) {
   const url = new URL(reqUrl, 'http://localhost')
   return {
@@ -980,60 +814,18 @@ async function handleRequest(req, res) {
   const requestId = randomUUID()
   const routeProvider =
     route?.provider ||
-    (pathname === MEMORIX_DISCOVER_PATH || pathname === MEMORIX_CALL_PATH
-      ? 'memorix'
-      : pathname === QDRANT_DISCOVER_PATH || pathname === QDRANT_CALL_PATH
-        ? 'qdrant'
-        : pathname === DOCSUITE_DISCOVER_PATH || pathname === DOCSUITE_CALL_PATH
-          ? 'docsuite'
-          : pathname === TELEMETRY_PATH
-            ? 'telemetry'
-            : 'proxy')
+    (pathname === QDRANT_DISCOVER_PATH || pathname === QDRANT_CALL_PATH
+      ? 'qdrant'
+      : pathname === DOCSUITE_DISCOVER_PATH || pathname === DOCSUITE_CALL_PATH
+        ? 'docsuite'
+        : pathname === TELEMETRY_PATH
+          ? 'telemetry'
+          : 'proxy')
   const logDir = await resolveLogDir()
   let logger = createNoopLogger()
   if (logDir) {
     const requestLogFile = `${logDir}/${requestId}-${routeProvider}.jsonl`
     logger = createLogger(requestLogFile)
-  }
-
-  if (pathname === MEMORIX_DISCOVER_PATH && req.method === 'GET') {
-    try {
-      await handleMemorixDiscover(req, res, logger, requestId)
-    } catch (error) {
-      logger.write({
-        type: 'memorix.discover.error',
-        requestId,
-        message: error instanceof Error ? error.message : String(error),
-      })
-      res.writeHead(502, {
-        'Access-Control-Allow-Origin': CORS_ORIGIN,
-        'Content-Type': 'application/json',
-      })
-      res.end(JSON.stringify({ error: 'Memorix discover failed' }))
-    } finally {
-      logger.close()
-    }
-    return
-  }
-
-  if (pathname === MEMORIX_CALL_PATH && req.method === 'POST') {
-    try {
-      await handleMemorixCall(req, res, logger, requestId)
-    } catch (error) {
-      logger.write({
-        type: 'memorix.call.error',
-        requestId,
-        message: error instanceof Error ? error.message : String(error),
-      })
-      res.writeHead(502, {
-        'Access-Control-Allow-Origin': CORS_ORIGIN,
-        'Content-Type': 'application/json',
-      })
-      res.end(JSON.stringify({ error: 'Memorix call failed' }))
-    } finally {
-      logger.close()
-    }
-    return
   }
 
   if (pathname === QDRANT_DISCOVER_PATH && req.method === 'GET') {
@@ -1152,8 +944,6 @@ async function handleRequest(req, res) {
           '/api/azure',
           '/api/ollama',
           TELEMETRY_PATH,
-          MEMORIX_DISCOVER_PATH,
-          MEMORIX_CALL_PATH,
           QDRANT_DISCOVER_PATH,
           QDRANT_CALL_PATH,
           DOCSUITE_DISCOVER_PATH,

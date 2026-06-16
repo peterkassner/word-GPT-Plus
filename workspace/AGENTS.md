@@ -184,3 +184,19 @@ Governance rules:
 - `POST /api/transform` accepts `{ filename, content_base64 }`, converts to markdown, enforces `ATTACHMENT_MAX_CHARS` (default 80 000 chars), returns `{ markdown, charCount, truncated }`.
 - New state: `attachedDocuments` ref in `HomePage.vue`. New util: `src/utils/fileParser.ts`. New tools: `createAttachmentTools()` in `generalTools.ts` (listAttachedDocuments + getAttachedDocumentContent).
 - Attachments persist across turns until the user explicitly removes them; they are injected alongside selection text in HumanMessage.
+
+## Learned User Preferences
+
+- Canonical Office add-in manifest for GUID bumps is `references/gg-laptop-docx-runtime-apps/manifest.xml`, not `release/self-hosted/` paths alone.
+- Prefer one Docker container running nginx (UI) and the Node proxy together with coupled start/stop, not separate services that can drift.
+- Apply minimal scoped fixes for lint and validation failures rather than broad refactors.
+- Do not commit `.cursor/`, `references/`, `plan`, or `.vscode/`; root `.gitignore` excludes them.
+
+## Learned Workspace Facts
+
+- LAN sideload targets the Mac host (currently `192.168.1.71`): task pane UI on port **3232**, Node proxy on **3100** (`manifest.xml` SourceLocation uses :3232).
+- Production Docker: single `word-gpt-plus` container runs nginx (80→host 3232) and Node proxy (3100) via `docker/entrypoint.sh`; compose uses `restart: unless-stopped`.
+- Alpine nginx in the Docker image needs `docker/nginx-default.conf`; stock `/etc/nginx/http.d/default.conf` returns 404 for static assets.
+- Docker image build runs `./node_modules/.bin/vite build` directly because `prebuild` manifest bump needs `references/` outside the build context.
+- Canonical sideload manifest is `references/gg-laptop-docx-runtime-apps/manifest.xml`; it shares an inode with the Windows `appCatalog/manifest.xml` via symlink; `references/` is gitignored so GUID bumps are local—CI verifies via tracked `workspace/release/self-hosted/manifest.lan.xml`.
+- `yarn bump:manifest:id` (also `prebuild`) bumps `<Id>` in the canonical manifest and syncs to `release/self-hosted/manifest.xml` and `manifest.lan.xml`; GitHub workflow `manifest-guid.yml` gates push/PR when add-in code changes.

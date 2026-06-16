@@ -32,11 +32,9 @@ function resolveProxyBaseFromStorage(): string | null {
     return resolveProxyBase(proxyUrl)
   }
 
-  const mcpProxy = storage.getItem(localStorageKey.mcpProxyHubUrl) || ''
-  if (mcpProxy) {
-    return resolveProxyBase(mcpProxy)
-  }
-
+  // Do NOT fall through to mcpProxyHubUrl: that is the MCP bridge port (8096),
+  // not the API proxy port (3100). Using it as a telemetry base causes telemetry
+  // to be sent to the MCP hub which has no /api/telemetry handler.
   return null
 }
 

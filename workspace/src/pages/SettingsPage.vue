@@ -81,36 +81,32 @@
             </SettingCard>
             <SettingCard>
               <label class="mb-2 flex items-center justify-between gap-2 text-sm text-secondary">
-                <span>Enable Memorix tools</span>
-                <input v-model="settingForm.enableMemorixTools" type="checkbox" />
+                <span>Enable Hindsight memory tools</span>
+                <input v-model="settingForm.enableHindsightTools" type="checkbox" />
               </label>
               <p class="px-3 pb-2 text-xs text-secondary">
-                Uses MCP server <span class="text-main">Memorix</span> so Agent mode can access persisted tool metadata.
+                Uses Hindsight memory server so Agent mode can retain, recall, and reflect on workspace memories.
               </p>
-              <div v-if="settingForm.enableMemorixTools" class="flex flex-col gap-2">
+              <div v-if="settingForm.enableHindsightTools" class="flex flex-col gap-2">
                 <CustomInput
-                  v-model="settingForm.mcpProxyHubUrl"
-                  title="MCP proxy hub URL"
-                  placeholder="http://127.0.0.1:8096"
+                  v-model="settingForm.hindsightBaseUrl"
+                  title="Hindsight base URL"
+                  placeholder="http://127.0.0.1:8888"
                 />
                 <CustomInput
-                  v-model="settingForm.memorixAgentId"
-                  title="Memorix agent ID"
+                  v-model="settingForm.hindsightMemoryBankId"
+                  title="Memory bank ID"
                   placeholder="word-gpt-plus"
                 />
                 <CustomInput
-                  v-model="settingForm.memorixToolsEndpoint"
-                  title="Memorix tools list endpoint"
-                  placeholder="/api/tools/memorix"
+                  v-model="settingForm.hindsightApiKey"
+                  title="API Key (optional)"
+                  type="password"
+                  placeholder="Enter if Hindsight requires authentication"
                 />
                 <CustomInput
-                  v-model="settingForm.memorixToolsCallEndpoint"
-                  title="Memorix tools call endpoint"
-                  placeholder="/api/tools/memorix/call"
-                />
-                <CustomInput
-                  v-model.number="settingForm.memorixToolTimeoutMs"
-                  title="Memorix tool timeout (ms)"
+                  v-model.number="settingForm.hindsightToolTimeoutMs"
+                  title="Hindsight tool timeout (ms)"
                   placeholder="12000"
                   type="number"
                   :min="1000"
@@ -118,8 +114,8 @@
                   :step="500"
                 />
                 <CustomInput
-                  v-model.number="settingForm.memorixMaxRetries"
-                  title="Memorix max retries"
+                  v-model.number="settingForm.hindsightMaxRetries"
+                  title="Hindsight max retries"
                   placeholder="2"
                   type="number"
                   :min="0"
@@ -665,13 +661,11 @@ const migrateLegacy3232Endpoints = () => {
 
   const keysToMigrate: string[] = [
     localStorageKey.proxy,
-    localStorageKey.mcpProxyHubUrl,
-    localStorageKey.memorixToolsEndpoint,
-    localStorageKey.memorixToolsCallEndpoint,
     localStorageKey.qdrantResourcesToolsEndpoint,
     localStorageKey.qdrantResourcesToolsCallEndpoint,
     localStorageKey.docSuiteToolsEndpoint,
     localStorageKey.docSuiteToolsCallEndpoint,
+    localStorageKey.hindsightBaseUrl,
   ]
 
   const normalize = (raw: string): string => {
@@ -998,14 +992,13 @@ const buildConfigSnapshot = () => {
     exportedAt: new Date().toISOString(),
     schemaLastUpdated: new Date().toISOString(),
     redactionEnabled: settingForm.value.telemetryRedactSensitive,
-    memorix: {
-      enableMemorixTools: settingForm.value.enableMemorixTools,
-      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
-      memorixAgentId: settingForm.value.memorixAgentId,
-      memorixToolsEndpoint: settingForm.value.memorixToolsEndpoint,
-      memorixToolsCallEndpoint: settingForm.value.memorixToolsCallEndpoint,
-      memorixToolTimeoutMs: settingForm.value.memorixToolTimeoutMs,
-      memorixMaxRetries: settingForm.value.memorixMaxRetries,
+    hindsight: {
+      enableHindsightTools: settingForm.value.enableHindsightTools,
+      hindsightBaseUrl: settingForm.value.hindsightBaseUrl,
+      hindsightMemoryBankId: settingForm.value.hindsightMemoryBankId,
+      hindsightApiKey: settingForm.value.hindsightApiKey,
+      hindsightToolTimeoutMs: settingForm.value.hindsightToolTimeoutMs,
+      hindsightMaxRetries: settingForm.value.hindsightMaxRetries,
     },
     qdrantResources: {
       enableQdrantResourcesTools: settingForm.value.enableQdrantResourcesTools,

@@ -2,10 +2,13 @@ services:
   word-gpt-plus:
     build: .
     container_name: word-gpt-plus
+    restart: unless-stopped
     ports:
       - "3232:80"
       - "3100:3100"
     environment:
       - NODE_ENV=production
+      - PORT=3100
+      - LOG_DIR=/app/data/logs
     volumes:
       - ./word-gpt-plus-logs:/app/data/logs

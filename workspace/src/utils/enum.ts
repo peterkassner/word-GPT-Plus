@@ -84,4 +84,11 @@ export const localStorageKey = {
   proxy: 'proxy',
   defaultSystemPrompt: 'defaultSystemPrompt',
   defaultPrompt: 'defaultPrompt',
+  // hindsight tool provider
+  enableHindsightTools: 'enableHindsightTools',
+  hindsightBaseUrl: 'hindsightBaseUrl',
+  hindsightMemoryBankId: 'hindsightMemoryBankId',
+  hindsightApiKey: 'hindsightApiKey',
+  hindsightToolTimeoutMs: 'hindsightToolTimeoutMs',
+  hindsightMaxRetries: 'hindsightMaxRetries',
 } as const
