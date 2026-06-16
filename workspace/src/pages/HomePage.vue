@@ -80,6 +80,44 @@
         </SingleSelect>
       </div>
 
+      <!-- Tool Status Row -->
+      <div class="flex w-full items-center justify-center gap-1.5 rounded-md border border-border-secondary bg-surface px-2 py-1">
+        <span class="mr-1 text-[10px] font-medium tracking-wide text-tertiary uppercase">Tools</span>
+        <span
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          :class="{
+            'bg-success/15 text-success': hindsightStatus === 'ok',
+            'bg-danger/15 text-danger': hindsightStatus === 'error',
+            'bg-bg-secondary text-tertiary': hindsightStatus === 'disabled',
+          }"
+          :title="hindsightStatus === 'ok' ? `Hindsight: ${hindsightToolNames.value.size} tools loaded` : hindsightStatus === 'error' ? 'Hindsight: load failed' : 'Hindsight: disabled'"
+        >
+          Hindsight
+        </span>
+        <span
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          :class="{
+            'bg-success/15 text-success': docSuiteStatus === 'ok',
+            'bg-danger/15 text-danger': docSuiteStatus === 'error',
+            'bg-bg-secondary text-tertiary': docSuiteStatus === 'disabled',
+          }"
+          :title="docSuiteStatus === 'ok' ? `DocSuite: ${docSuiteToolNames.value.size} tools loaded` : docSuiteStatus === 'error' ? 'DocSuite: load failed' : 'DocSuite: disabled'"
+        >
+          DocSuite
+        </span>
+        <span
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          :class="{
+            'bg-success/15 text-success': qdrantStatus === 'ok',
+            'bg-danger/15 text-danger': qdrantStatus === 'error',
+            'bg-bg-secondary text-tertiary': qdrantStatus === 'disabled',
+          }"
+          :title="qdrantStatus === 'ok' ? `Qdrant: ${qdrantToolNames.value.size} tools loaded` : qdrantStatus === 'error' ? 'Qdrant: load failed' : 'Qdrant: disabled'"
+        >
+          Qdrant
+        </span>
+      </div>
+
       <!-- Chat Messages Container -->
       <div
         ref="messagesContainer"
@@ -491,6 +529,9 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
   hindsightToolNames.value = new Set()
   qdrantToolNames.value = new Set()
   docSuiteToolNames.value = new Set()
+  hindsightToolError.value = false
+  qdrantToolError.value = false
+  docSuiteToolError.value = false
   currentHindsightAgentId.value = hindsightConfig.hindsightMemoryBankId || 'word-gpt-plus'
   currentQdrantAgentId.value = qdrantConfig.qdrantResourcesAgentId || 'word-gpt-plus'
   currentDocSuiteAgentId.value = docSuiteConfig.docSuiteAgentId || 'word-gpt-plus'
@@ -505,6 +546,7 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
       logToolDiscoveryFailure('hindsight', error)
       messageUtil.error('Hindsight tool discovery failed')
       hindsightToolNames.value = new Set()
+      hindsightToolError.value = true
     }
   }
 
@@ -518,6 +560,7 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
       logToolDiscoveryFailure('qdrant', error)
       messageUtil.error('Qdrant tool discovery failed')
       qdrantToolNames.value = new Set()
+      qdrantToolError.value = true
     }
   }
 
@@ -531,6 +574,7 @@ async function getActiveToolsWithProviders(): Promise<ReturnType<typeof createGe
       logToolDiscoveryFailure('docsuite', error)
       messageUtil.error('DocSuite tool discovery failed')
       docSuiteToolNames.value = new Set()
+      docSuiteToolError.value = true
     }
   }
 
@@ -656,6 +700,31 @@ const telemetryEnabled = ref(localStorage.getItem(localStorageKey.telemetryEnabl
 const hindsightToolNames = ref<Set<string>>(new Set())
 const qdrantToolNames = ref<Set<string>>(new Set())
 const docSuiteToolNames = ref<Set<string>>(new Set())
+const hindsightToolError = ref(false)
+const qdrantToolError = ref(false)
+const docSuiteToolError = ref(false)
+
+// Per-provider availability status: 'disabled' | 'ok' | 'error'
+// Read directly from localStorage so the status row reflects current settings
+// without requiring a re-render cycle through settingForm.
+const hindsightStatus = computed<'disabled' | 'ok' | 'error'>(() => {
+  if (localStorage.getItem(localStorageKey.enableHindsightTools) !== 'true') return 'disabled'
+  if (hindsightToolError.value) return 'error'
+  if (hindsightToolNames.value.size > 0) return 'ok'
+  return 'error'
+})
+const qdrantStatus = computed<'disabled' | 'ok' | 'error'>(() => {
+  if (localStorage.getItem(localStorageKey.enableQdrantResourcesTools) !== 'true') return 'disabled'
+  if (qdrantToolError.value) return 'error'
+  if (qdrantToolNames.value.size > 0) return 'ok'
+  return 'error'
+})
+const docSuiteStatus = computed<'disabled' | 'ok' | 'error'>(() => {
+  if (localStorage.getItem(localStorageKey.enableDocSuiteReferenceTools) !== 'true') return 'disabled'
+  if (docSuiteToolError.value) return 'error'
+  if (docSuiteToolNames.value.size > 0) return 'ok'
+  return 'error'
+})
 const currentHindsightAgentId = ref('word-gpt-plus')
 const currentQdrantAgentId = ref('word-gpt-plus')
 const currentDocSuiteAgentId = ref('word-gpt-plus')
