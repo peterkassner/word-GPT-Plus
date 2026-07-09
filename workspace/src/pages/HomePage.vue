@@ -81,38 +81,58 @@
       </div>
 
       <!-- Tool Status Row -->
-      <div class="flex w-full items-center justify-center gap-1.5 rounded-md border border-border-secondary bg-surface px-2 py-1">
+      <div
+        class="flex w-full items-center justify-center gap-1.5 rounded-md border border-border-secondary bg-surface px-2 py-1"
+      >
         <span class="mr-1 text-[10px] font-medium tracking-wide text-tertiary uppercase">Tools</span>
         <span
-          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
           :class="{
             'bg-success/15 text-success': hindsightStatus === 'ok',
             'bg-danger/15 text-danger': hindsightStatus === 'error',
             'bg-bg-secondary text-tertiary': hindsightStatus === 'disabled',
           }"
-          :title="hindsightStatus === 'ok' ? `Hindsight: ${hindsightToolNames.value.size} tools loaded` : hindsightStatus === 'error' ? 'Hindsight: load failed' : 'Hindsight: disabled'"
+          :title="
+            hindsightStatus === 'ok'
+              ? `Hindsight: ${hindsightToolNames.value.size} tools loaded`
+              : hindsightStatus === 'error'
+                ? 'Hindsight: load failed'
+                : 'Hindsight: disabled'
+          "
         >
           Hindsight
         </span>
         <span
-          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
           :class="{
             'bg-success/15 text-success': docSuiteStatus === 'ok',
             'bg-danger/15 text-danger': docSuiteStatus === 'error',
             'bg-bg-secondary text-tertiary': docSuiteStatus === 'disabled',
           }"
-          :title="docSuiteStatus === 'ok' ? `DocSuite: ${docSuiteToolNames.value.size} tools loaded` : docSuiteStatus === 'error' ? 'DocSuite: load failed' : 'DocSuite: disabled'"
+          :title="
+            docSuiteStatus === 'ok'
+              ? `DocSuite: ${docSuiteToolNames.value.size} tools loaded`
+              : docSuiteStatus === 'error'
+                ? 'DocSuite: load failed'
+                : 'DocSuite: disabled'
+          "
         >
           DocSuite
         </span>
         <span
-          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          class="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
           :class="{
             'bg-success/15 text-success': qdrantStatus === 'ok',
             'bg-danger/15 text-danger': qdrantStatus === 'error',
             'bg-bg-secondary text-tertiary': qdrantStatus === 'disabled',
           }"
-          :title="qdrantStatus === 'ok' ? `Qdrant: ${qdrantToolNames.value.size} tools loaded` : qdrantStatus === 'error' ? 'Qdrant: load failed' : 'Qdrant: disabled'"
+          :title="
+            qdrantStatus === 'ok'
+              ? `Qdrant: ${qdrantToolNames.value.size} tools loaded`
+              : qdrantStatus === 'error'
+                ? 'Qdrant: load failed'
+                : 'Qdrant: disabled'
+          "
         >
           Qdrant
         </span>
@@ -366,6 +386,10 @@
 </template>
 
 <script lang="ts" setup>
+defineOptions({
+  name: 'Home',
+})
+
 import { AIMessage, HumanMessage, Message, SystemMessage } from '@langchain/core/messages'
 import { useStorage } from '@vueuse/core'
 import {
@@ -662,7 +686,7 @@ function loadSelectedPrompt() {
 // Chat state
 const mode = useStorage(localStorageKey.chatMode, 'ask' as 'ask' | 'agent')
 const history = ref<Message[]>([])
-const userInput = ref('')
+const userInput = useStorage(localStorageKey.promptDraft, '')
 const loading = ref(false)
 const messagesContainer = ref<HTMLElement>()
 const inputTextarea = ref<HTMLTextAreaElement>()

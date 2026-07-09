@@ -19,8 +19,6 @@ export function checkAuth(auth: Auth): boolean {
       return !!auth.geminiAPIKey
     case 'groq':
       return !!auth.groqAPIKey
-    case 'openrouter':
-      return !!auth.openrouterAPIKey
     case 'ollama':
       return true
     default:

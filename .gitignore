@@ -2,3 +2,10 @@
 references/
 plan
 .vscode/
+.env
+node_modules/
+logs/
+workspace/logs/
+workspace/proxy-server/logs/
+workspace/release/self-hosted/*.bak
+workspace/release/self-hosted/*.bak-*

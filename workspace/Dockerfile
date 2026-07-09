@@ -1,5 +1,5 @@
 # Stage 1: build Vue task-pane assets
-FROM node:22.21.1-alpine3.22 AS build-stage
+FROM node:22.22.2-alpine AS build-stage
 WORKDIR /app
 
 COPY package.json yarn.lock ./

@@ -9,6 +9,7 @@ export const localStorageKey = {
   useSelectedText: 'useSelectedText',
   agentMaxIterations: 'agentMaxIterations',
   threadId: 'threadId',
+  promptDraft: 'promptDraft',
   // official api
   apiKey: 'apiKey',
   model: 'model',

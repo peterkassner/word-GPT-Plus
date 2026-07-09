@@ -50,7 +50,6 @@ export const availableAPIs: IStringKeyMap = {
   gemini: 'gemini',
   ollama: 'ollama',
   groq: 'groq',
-  openrouter: 'openrouter',
 }
 
 // official API 可用的模型
@@ -69,17 +68,18 @@ export const availableModels: string[] = [
   'o3',
 ]
 
-// OpenRouter - populated from API at runtime, these are fallback defaults
+// OpenRouter API 可用的模型 (fallback defaults, populated from API at runtime)
 export const availableModelsForOpenRouter: string[] = [
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-opus-4',
-  'openai/gpt-5',
-  'openai/gpt-4.1',
-  'google/gemini-2.5-pro',
-  'google/gemini-2.5-flash',
-  'meta-llama/llama-4-maverick',
+  'openrouter/auto',
+  'openai/gpt-5.2',
+  'openai/gpt-5.1',
+  'anthropic/claude-sonnet-4.6',
+  'google/gemini-3-pro-preview',
   'deepseek/deepseek-r1',
+  'mistralai/mistral-large',
+  'meta-llama/llama-3.3-70b-instruct',
   'qwen/qwen3-235b-a22b',
+  'x-ai/grok-4.1-fast',
 ]
 
 // Gemini API 可用的模型
@@ -103,6 +103,7 @@ export const availableModelsForOllama: string[] = [
   'kimi-k2:1t-cloud',
   'gemini-3-flash-preview:latest',
   'ministral-3:latest',
+  'gemini-3-pro-preview:latest',
 ]
 
 export const availableModelsForGroq: string[] = [
@@ -121,99 +122,40 @@ export const availableModelsForGroq: string[] = [
   'qwen/qwen3-32b',
 ]
 
-// OpenRouter API 可用的模型
-export const availableModelsForOpenRouter: string[] = [
-  'openrouter/auto',
-  'openai/gpt-5.2',
-  'openai/gpt-5.1',
-  'anthropic/claude-sonnet-4.6',
-  'google/gemini-3-pro-preview',
-  'deepseek/deepseek-r1',
-  'mistralai/mistral-large',
-  'meta-llama/llama-3.3-70b-instruct',
-  'qwen/qwen3-235b-a22b',
-  'x-ai/grok-4.1-fast',
-]
 export const buildInPrompt = {
   translate: {
     system: (language: string) =>
-      `You are an expert polyglot translator. Your task is to provide professional, context-aware translations into ${language}. 
-      Maintain formatting, keep the original tone, and ensure the output is idiomatic and elegant.`,
+      `You are an expert polyglot translator. Your task is to provide professional, context-aware translations into ${language}. \n      Maintain formatting, keep the original tone, and ensure the output is idiomatic and elegant.`,
     user: (text: string, language: string) =>
-      `Task: Translate the following text into ${language}.
-      Constraints:
-      1. Provide a natural-sounding translation suitable for native speakers.
-      2. If the text is technical, use appropriate terminology.
-      3. OUTPUT ONLY the translated text. Do not include "Here is the translation" or any explanations.
-      
-      Text: ${text}`,
+      `Task: Translate the following text into ${language}.\n      Constraints:\n      1. Provide a natural-sounding translation suitable for native speakers.\n      2. If the text is technical, use appropriate terminology.\n      3. OUTPUT ONLY the translated text. Do not include "Here is the translation" or any explanations.\n      \n      Text: ${text}`,
   },
 
   polish: {
     system: (language: string) =>
       `You are a professional editor and stylist. Your goal is to make the text more professional, engaging, and clear in ${language}.`,
     user: (text: string, language: string) =>
-      `Task: Polish the following text for better flow and impact.
-      Improvements:
-      - Correct grammar, spelling, and punctuation.
-      - Enhance vocabulary while maintaining the original meaning.
-      - Improve sentence structure and eliminate redundancy.
-      - Ensure the tone is consistent and professional.
-      Constraints: 
-      1. Respond in ${language}.
-      2. OUTPUT ONLY the polished text without any commentary.
-      
-      Text: ${text}`,
+      `Task: Polish the following text for better flow and impact.\n      Improvements:\n      - Correct grammar, spelling, and punctuation.\n      - Enhance vocabulary while maintaining the original meaning.\n      - Improve sentence structure and eliminate redundancy.\n      - Ensure the tone is consistent and professional.\n      Constraints: \n      1. Respond in ${language}.\n      2. OUTPUT ONLY the polished text without any commentary.\n      \n      Text: ${text}`,
   },
 
   academic: {
     system: (language: string) =>
       `You are a senior academic editor for high-impact journals (e.g., Nature, Science). You specialize in formal, precise, and objective scholarly writing in ${language}.`,
     user: (text: string, language: string) =>
-      `Task: Rewrite the following text to meet professional academic standards.
-      Requirements:
-      - Use formal, objective language and avoid colloquialisms.
-      - Ensure logical transitions and precise scientific terminology.
-      - Maintain a third-person perspective unless the context requires otherwise.
-      - Optimize for clarity and conciseness as per peer-review expectations.
-      Constraints:
-      1. Respond in ${language}.
-      2. OUTPUT ONLY the revised text. No pre-amble or meta-talk.
-      
-      Text: ${text}`,
+      `Task: Rewrite the following text to meet professional academic standards.\n      Requirements:\n      - Use formal, objective language and avoid colloquialisms.\n      - Ensure logical transitions and precise scientific terminology.\n      - Maintain a third-person perspective unless the context requires otherwise.\n      - Optimize for clarity and conciseness as per peer-review expectations.\n      Constraints:\n      1. Respond in ${language}.\n      2. OUTPUT ONLY the revised text. No pre-amble or meta-talk.\n      \n      Text: ${text}`,
   },
 
   summary: {
     system: (language: string) =>
       `You are an expert document analyst. You excel at distilling complex information into clear, actionable summaries in ${language}.`,
     user: (text: string, language: string) =>
-      `Task: Summarize the following text.
-      Structure:
-      - Capture the core message and primary supporting points.
-      - Aim for approximately 100 words (or 3-5 key bullet points).
-      - Ensure the summary is self-contained and easy to understand.
-      Constraints:
-      1. Respond in ${language}.
-      2. OUTPUT ONLY the summary.
-      
-      Text: ${text}`,
+      `Task: Summarize the following text.\n      Structure:\n      - Capture the core message and primary supporting points.\n      - Aim for approximately 100 words (or 3-5 key bullet points).\n      - Ensure the summary is self-contained and easy to understand.\n      Constraints:\n      1. Respond in ${language}.\n      2. OUTPUT ONLY the summary.\n      \n      Text: ${text}`,
   },
 
   grammar: {
     system: (language: string) =>
       `You are a meticulous proofreader. Your sole focus is linguistic accuracy, including syntax, morphology, and orthography in ${language}.`,
     user: (text: string, language: string) =>
-      `Task: Check and correct the grammar of the following text.
-      Focus:
-      - Fix all spelling and punctuation errors.
-      - Correct subject-verb agreement and tense inconsistencies.
-      - Ensure proper sentence structure.
-      Constraints:
-      1. If the text is already perfect, respond exactly with: "No grammatical issues found."
-      2. Otherwise, provide ONLY the corrected text without explaining the changes.
-      3. Respond in ${language}.
-      
-      Text: ${text}`,
+      `Task: Check and correct the grammar of the following text.\n      Focus:\n      - Fix all spelling and punctuation errors.\n      - Correct subject-verb agreement and tense inconsistencies.\n      - Ensure proper sentence structure.\n      Constraints:\n      1. If the text is already perfect, respond exactly with: "No grammatical issues found."\n      2. Otherwise, provide ONLY the corrected text without explaining the changes.\n      3. Respond in ${language}.\n      \n      Text: ${text}`,
   },
 }
 
@@ -231,9 +173,9 @@ export const getBuiltInPrompt = () => {
       const typedKey = key as keyof typeof buildInPrompt
       if (result[typedKey]) {
         result[typedKey] = {
-          system: (language: string) => customPrompts[key].system.replace(/\$\{language\}/g, language),
+          system: (language: string) => customPrompts[key].system.replace(/\${language}/g, language),
           user: (text: string, language: string) =>
-            customPrompts[key].user.replace(/\$\{text\}/g, text).replace(/\$\{language\}/g, language),
+            customPrompts[key].user.replace(/\${text}/g, text).replace(/\${language}/g, language),
         }
       }
     })
