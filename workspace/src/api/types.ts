@@ -40,6 +40,17 @@ export interface OpenRouterOptions extends BaseChatCompletionOptions {
   proxy?: ProxyOptions
 }
 
+export interface LMStudioOptions extends BaseChatCompletionOptions {
+  provider: 'lmstudio'
+  model?: string
+  config: {
+    apiKey: string
+    baseURL?: string
+    dangerouslyAllowBrowser?: boolean
+  }
+  proxy?: ProxyOptions
+}
+
 export interface OllamaOptions extends BaseChatCompletionOptions {
   provider: 'ollama'
   ollamaModel: string
@@ -73,12 +84,13 @@ export interface AzureOptions extends BaseChatCompletionOptions {
 export type ProviderOptions =
   | OpenAIOptions
   | OpenRouterOptions
+  | LMStudioOptions
   | OllamaOptions
   | GroqOptions
   | GeminiOptions
   | AzureOptions
 
-type supportedProviders = 'official' | 'openrouter' | 'ollama' | 'groq' | 'gemini' | 'azure'
+type supportedProviders = 'official' | 'openrouter' | 'lmstudio' | 'ollama' | 'groq' | 'gemini' | 'azure'
 // Agent options with tools support
 export interface AgentOptions extends BaseChatCompletionOptions {
   provider: supportedProviders

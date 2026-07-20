@@ -60,6 +60,14 @@ export const localStorageKey = {
   openrouterCustomModels: 'openrouterCustomModels',
   openrouterTemperature: 'openrouterTemperature',
   openrouterMaxTokens: 'openrouterMaxTokens',
+  // LM Studio API
+  lmstudioAPIKey: 'lmstudioAPIKey',
+  lmstudioBasePath: 'lmstudioBasePath',
+  lmstudioModel: 'lmstudioModel',
+  lmstudioCustomModel: 'lmstudioCustomModel',
+  lmstudioCustomModels: 'lmstudioCustomModels',
+  lmstudioTemperature: 'lmstudioTemperature',
+  lmstudioMaxTokens: 'lmstudioMaxTokens',
   // gemini api
   geminiAPIKey: 'geminiAPIKey',
   geminiMaxTokens: 'geminiMaxTokens',

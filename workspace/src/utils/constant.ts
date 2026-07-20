@@ -46,6 +46,7 @@ export const languageMap: IStringKeyMap = {
 export const availableAPIs: IStringKeyMap = {
   official: 'official',
   openrouter: 'openrouter',
+  lmstudio: 'lmstudio',
   azure: 'azure',
   gemini: 'gemini',
   ollama: 'ollama',
@@ -81,6 +82,8 @@ export const availableModelsForOpenRouter: string[] = [
   'qwen/qwen3-235b-a22b',
   'x-ai/grok-4.1-fast',
 ]
+
+export const availableModelsForLMStudio: string[] = ['qwen/qwen3.6-27b']
 
 // Gemini API 可用的模型
 export const availableModelsForGemini: string[] = [

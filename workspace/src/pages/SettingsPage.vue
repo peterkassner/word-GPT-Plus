@@ -702,6 +702,7 @@ const enableAgentTelemetry = ref(localStorage.getItem(localStorageKey.telemetryE
 
 const getApiProviderLabel = (platform: string) => {
   if (platform === 'openrouter') return 'OpenRouter'
+  if (platform === 'lmstudio') return 'LM Studio'
   if (platform === 'official') return 'OpenAI'
   return platform
 }
@@ -827,7 +828,7 @@ const getCustomModelsKey = (platform: string): SettingNames | null => {
 }
 
 const loadCustomModels = () => {
-  const platforms = ['official', 'openrouter', 'gemini', 'ollama', 'groq']
+  const platforms = ['official', 'openrouter', 'lmstudio', 'gemini', 'ollama', 'groq']
   platforms.forEach(platform => {
     const key = getCustomModelsKey(platform)
     if (key && settingPreset[key].getFunc) {

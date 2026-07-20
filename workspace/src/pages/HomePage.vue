@@ -16,7 +16,7 @@
       <!-- Header -->
       <div class="flex items-center justify-between rounded-md border border-border-secondary bg-surface px-2 py-1.5">
         <div class="flex flex-1 items-center gap-2">
-          <span class="text-sm font-semibold tracking-tight text-main">Assistant</span>
+          <span class="text-sm font-semibold tracking-tight text-danger">{{ appVersionLabel }}</span>
         </div>
         <div class="flex items-center gap-1 rounded-md border border-border-secondary bg-bg-secondary p-0.5">
           <CustomButton
@@ -316,7 +316,7 @@
               class="h-7 max-w-full min-w-0 cursor-pointer rounded-md border border-border bg-surface p-1 text-xs text-secondary hover:border-accent focus:outline-none disabled:cursor-not-allowed disabled:bg-secondary"
             >
               <option v-for="item in settingPreset.api.optionObj" :key="item.value" :value="item.value">
-                {{ item.label.replace('official', 'OpenAI') }}
+                {{ formatProviderLabel(item.value) }}
               </option>
             </select>
             <select
@@ -410,7 +410,7 @@ import {
   Square,
 } from 'lucide-vue-next'
 import { v4 as uuidv4 } from 'uuid'
-import { computed, nextTick, onBeforeMount, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeMount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -420,7 +420,8 @@ import { getAgentResponse, getChatResponse } from '@/api/union'
 import CustomButton from '@/components/CustomButton.vue'
 import SingleSelect from '@/components/SingleSelect.vue'
 import CheckPointsPage from '@/pages/checkPointsPage.vue'
-import { checkAuth } from '@/utils/common'
+import { appVersionLabel } from '@/utils/appVersion'
+import { checkAuth, formatProviderLabel } from '@/utils/common'
 import { buildInPrompt, getBuiltInPrompt } from '@/utils/constant'
 import {
   createDocSuiteReferenceTools,
@@ -439,13 +440,23 @@ import { message as messageUtil } from '@/utils/message'
 import { resolveProxyBase } from '@/utils/proxyResolver'
 import { createQdrantResourcesTools, getQdrantToolsConfigFromStorage } from '@/utils/qdrantResourcesTools'
 import useSettingForm from '@/utils/settingForm'
-import { settingPreset } from '@/utils/settingPreset'
+import { Setting_Names, settingPreset } from '@/utils/settingPreset'
 import { createWordTools, WordToolName } from '@/utils/wordTools'
 
 const router = useRouter()
 const { t } = useI18n()
 
 const settingForm = useSettingForm()
+
+const syncSettingsFromStorage = () => {
+  Setting_Names.forEach(key => {
+    const preset = settingPreset[key]
+    const value = preset.getFunc
+      ? preset.getFunc()
+      : (localStorage.getItem(preset.saveKey || key) ?? preset.defaultValue)
+    ;(settingForm.value as any)[key] = value
+  })
+}
 
 interface SavedPrompt {
   id: string
@@ -941,6 +952,19 @@ const getProxyConfig = () => {
   }
 }
 
+const getSameOriginLMStudioProxyConfig = () => {
+  if (typeof window === 'undefined' || window.location.port !== '3232') {
+    return undefined
+  }
+
+  return {
+    enabled: true,
+    baseURL: window.location.origin,
+  }
+}
+
+const getLMStudioProxyConfig = () => getProxyConfig() || getSameOriginLMStudioProxyConfig()
+
 const displayHistory = computed(() => {
   return history.value.filter(msg => !(msg instanceof SystemMessage))
 })
@@ -1000,30 +1024,50 @@ const parseModelResponse = (payload: any): string[] => {
   return []
 }
 
-const resolveModelEndpoint = (apiProvider: 'official' | 'openrouter') => {
+type OpenAICompatibleProvider = 'official' | 'openrouter' | 'lmstudio'
+
+const openAICompatibleProxyPaths: Record<OpenAICompatibleProvider, string> = {
+  official: '/api/openai/v1',
+  openrouter: '/api/openrouter/v1',
+  lmstudio: '/api/lmstudio/v1',
+}
+
+const resolveModelEndpoint = (apiProvider: OpenAICompatibleProvider) => {
+  if (apiProvider === 'lmstudio') {
+    const lmStudioProxy = getLMStudioProxyConfig()
+    if (lmStudioProxy?.enabled && lmStudioProxy.baseURL) {
+      return `${lmStudioProxy.baseURL}/api/lmstudio/v1/models`
+    }
+  }
+
   const proxyEnabled = localStorage.getItem(localStorageKey.enableProxy) === 'true'
   const proxyUrl = localStorage.getItem(localStorageKey.proxy)?.trim()
   if (proxyEnabled && proxyUrl) {
     const base = resolveProxyBase(proxyUrl)
-    return `${base}${apiProvider === 'openrouter' ? '/api/openrouter/v1' : '/api/openai/v1'}/models`
+    return `${base}${openAICompatibleProxyPaths[apiProvider]}/models`
   }
 
   if (apiProvider === 'openrouter') {
     return `${(settingForm.value.openrouterBasePath || 'https://openrouter.ai/api/v1').replace(/\/+$/, '')}/models`
   }
 
+  if (apiProvider === 'lmstudio') {
+    return `${(settingForm.value.lmstudioBasePath || 'http://127.0.0.1:1234/v1').replace(/\/+$/, '')}/models`
+  }
+
   return `${(settingForm.value.officialBasePath || 'https://api.openai.com/v1').replace(/\/+$/, '')}/models`
 }
 
 let modelAbortController: AbortController | null = null
-const fetchModelList = async (apiProvider: 'official' | 'openrouter') => {
+const fetchModelList = async (apiProvider: OpenAICompatibleProvider) => {
   const cacheKey = apiProvider
-  const apiKey =
-    apiProvider === 'openrouter'
-      ? (settingForm.value.openrouterAPIKey || '').trim()
-      : (settingForm.value.officialAPIKey || '').trim()
+  const apiKey = (() => {
+    if (apiProvider === 'openrouter') return (settingForm.value.openrouterAPIKey || '').trim()
+    if (apiProvider === 'lmstudio') return (settingForm.value.lmstudioAPIKey || '').trim()
+    return (settingForm.value.officialAPIKey || '').trim()
+  })()
 
-  if (apiProvider === 'official' && !apiKey) {
+  if ((apiProvider === 'official' || apiProvider === 'lmstudio') && !apiKey) {
     remoteModelOptions.value[cacheKey] = []
     return
   }
@@ -1075,6 +1119,10 @@ const currentModelOptions = computed(() => {
       presetOptions = settingPreset.openrouterModelSelect.optionList || []
       customModels = getCustomModels('openrouterCustomModels', 'openrouterCustomModel')
       break
+    case 'lmstudio':
+      presetOptions = settingPreset.lmstudioModelSelect.optionList || []
+      customModels = getCustomModels('lmstudioCustomModels', 'lmstudioCustomModel')
+      break
     case 'gemini':
       presetOptions = settingPreset.geminiModelSelect.optionList || []
       customModels = getCustomModels('geminiCustomModels', 'geminiCustomModel')
@@ -1113,6 +1161,8 @@ const currentModelSelect = computed({
         return settingForm.value.officialModelSelect
       case 'openrouter':
         return settingForm.value.openrouterModelSelect
+      case 'lmstudio':
+        return settingForm.value.lmstudioModelSelect
       case 'gemini':
         return settingForm.value.geminiModelSelect
       case 'ollama':
@@ -1134,6 +1184,10 @@ const currentModelSelect = computed({
       case 'openrouter':
         settingForm.value.openrouterModelSelect = value
         localStorage.setItem(localStorageKey.openrouterModel, value)
+        break
+      case 'lmstudio':
+        settingForm.value.lmstudioModelSelect = value
+        localStorage.setItem(localStorageKey.lmstudioModel, value)
         break
       case 'gemini':
         settingForm.value.geminiModelSelect = value
@@ -1160,7 +1214,7 @@ const currentModelSelect = computed({
 watch(
   () => currentModelSourceProvider.value,
   async provider => {
-    if (provider === 'official' || provider === 'openrouter') {
+    if (provider === 'official' || provider === 'openrouter' || provider === 'lmstudio') {
       await fetchModelList(provider)
     }
     await syncCurrentModelSelection()
@@ -1203,6 +1257,26 @@ watch(
   async () => {
     if (currentModelSourceProvider.value === 'openrouter') {
       await fetchModelList('openrouter')
+      await syncCurrentModelSelection()
+    }
+  },
+)
+
+watch(
+  () => settingForm.value.lmstudioAPIKey,
+  async () => {
+    if (currentModelSourceProvider.value === 'lmstudio') {
+      await fetchModelList('lmstudio')
+      await syncCurrentModelSelection()
+    }
+  },
+)
+
+watch(
+  () => settingForm.value.lmstudioBasePath,
+  async () => {
+    if (currentModelSourceProvider.value === 'lmstudio') {
+      await fetchModelList('lmstudio')
       await syncCurrentModelSelection()
     }
   },
@@ -1409,6 +1483,7 @@ const standardPrompt = (lang: string) =>
   `You are a helpful Microsoft Word specialist. Help users with drafting, brainstorming, and Word-related questions. Reply in ${lang}.`
 
 async function processChat(userMessage: HumanMessage, systemMessage?: string) {
+  syncSettingsFromStorage()
   const settings = settingForm.value
   const { replyLanguage: lang, api: provider } = settings
 
@@ -1475,6 +1550,18 @@ async function processChat(userMessage: HumanMessage, systemMessage?: string) {
       maxTokens: settings.openrouterMaxTokens,
       temperature: settings.openrouterTemperature,
       model: settings.openrouterModelSelect,
+    },
+    lmstudio: {
+      provider: 'lmstudio',
+      config: {
+        apiKey: settings.lmstudioAPIKey,
+        baseURL: settings.lmstudioBasePath,
+        dangerouslyAllowBrowser: true,
+      },
+      proxy: getLMStudioProxyConfig(),
+      maxTokens: settings.lmstudioMaxTokens,
+      temperature: settings.lmstudioTemperature,
+      model: settings.lmstudioModelSelect,
     },
     groq: {
       provider: 'groq',
@@ -1684,10 +1771,12 @@ function copyToClipboard(text: string) {
 }
 
 function checkApiKey() {
+  syncSettingsFromStorage()
   const auth = {
     type: settingForm.value.api as supportedPlatforms,
     apiKey: settingForm.value.officialAPIKey,
     openrouterAPIKey: settingForm.value.openrouterAPIKey,
+    lmstudioAPIKey: settingForm.value.lmstudioAPIKey,
     azureAPIKey: settingForm.value.azureAPIKey,
     geminiAPIKey: settingForm.value.geminiAPIKey,
     groqAPIKey: settingForm.value.groqAPIKey,
@@ -1854,6 +1943,7 @@ async function handleSelectThread(newThreadId: string) {
 
 onBeforeMount(() => {
   migrateLegacy3232Endpoints()
+  syncSettingsFromStorage()
   addWatch()
   initData()
   loadSavedPrompts()
@@ -1868,5 +1958,9 @@ onBeforeMount(() => {
       loading.value = false
     }
   }
+})
+
+onActivated(() => {
+  syncSettingsFromStorage()
 })
 </script>

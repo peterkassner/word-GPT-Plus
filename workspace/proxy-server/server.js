@@ -23,6 +23,7 @@ const TELEMETRY_PATH = '/api/telemetry'
 const providerTargets = {
   openai: 'https://api.openai.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
+  lmstudio: process.env.LMSTUDIO_ENDPOINT || 'http://127.0.0.1:1234/v1',
   groq: 'https://api.groq.com/openai/v1',
   gemini: 'https://generativelanguage.googleapis.com',
   ollama: process.env.OLLAMA_ENDPOINT || 'http://localhost:11434',
@@ -62,6 +63,12 @@ function getRequestTarget(url) {
     const tail = pathname.replace('/api/openrouter/v1', '') || '/'
     const upstreamPath = tail
     return { provider: 'openrouter', upstreamURL: `${providerTargets.openrouter}${upstreamPath}${parsed.search}` }
+  }
+
+  if (pathname === '/api/lmstudio/v1' || pathname.startsWith('/api/lmstudio/v1/')) {
+    const tail = pathname.replace('/api/lmstudio/v1', '') || '/'
+    const upstreamPath = tail
+    return { provider: 'lmstudio', upstreamURL: `${providerTargets.lmstudio}${upstreamPath}${parsed.search}` }
   }
 
   if (pathname === '/api/groq/v1' || pathname.startsWith('/api/groq/v1/')) {
@@ -939,6 +946,7 @@ async function handleRequest(req, res) {
         supported: [
           '/api/openai/v1',
           '/api/openrouter/v1',
+          '/api/lmstudio/v1',
           '/api/groq/v1',
           '/api/gemini',
           '/api/azure',

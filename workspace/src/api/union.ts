@@ -14,6 +14,7 @@ import {
   AzureOptions,
   GeminiOptions,
   GroqOptions,
+  LMStudioOptions,
   OllamaOptions,
   OpenAIOptions,
   OpenRouterOptions,
@@ -26,9 +27,10 @@ function createOpenAIModel(opts: OpenAIOptions) {
   const baseURL = hasProxy ? `${opts.proxy.baseURL}/api/openai/v1` : opts.config.baseURL || 'https://api.openai.com/v1'
   return new ChatOpenAI({
     modelName,
+    apiKey: opts.config.apiKey,
     configuration: {
-      apiKey: opts.config.apiKey,
       baseURL,
+      dangerouslyAllowBrowser: opts.config.dangerouslyAllowBrowser,
     },
     temperature: opts.temperature ?? 0.7,
     maxTokens: opts.maxTokens ?? 800,
@@ -43,9 +45,26 @@ function createOpenRouterModel(opts: OpenRouterOptions) {
     : opts.config.baseURL || 'https://openrouter.ai/api/v1'
   return new ChatOpenAI({
     modelName,
+    apiKey: opts.config.apiKey,
     configuration: {
-      apiKey: opts.config.apiKey,
       baseURL,
+      dangerouslyAllowBrowser: opts.config.dangerouslyAllowBrowser,
+    },
+    temperature: opts.temperature ?? 0.7,
+    maxTokens: opts.maxTokens ?? 800,
+  })
+}
+
+function createLMStudioModel(opts: LMStudioOptions) {
+  const modelName = opts.model || 'qwen/qwen3.6-27b'
+  const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
+  const baseURL = hasProxy ? `${opts.proxy.baseURL}/api/lmstudio/v1` : opts.config.baseURL || 'http://127.0.0.1:1234/v1'
+  return new ChatOpenAI({
+    modelName,
+    apiKey: opts.config.apiKey,
+    configuration: {
+      baseURL,
+      dangerouslyAllowBrowser: opts.config.dangerouslyAllowBrowser,
     },
     temperature: opts.temperature ?? 0.7,
     maxTokens: opts.maxTokens ?? 800,
@@ -55,6 +74,7 @@ function createOpenRouterModel(opts: OpenRouterOptions) {
 const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
   official: createOpenAIModel,
   openrouter: createOpenRouterModel,
+  lmstudio: createLMStudioModel,
 
   ollama: (opts: OllamaOptions) => {
     const hasProxy = opts.proxy?.enabled && opts.proxy?.baseURL
@@ -77,18 +97,6 @@ const ModelCreators: Record<string, (opts: any) => BaseChatModel> = {
       apiKey: opts.groqAPIKey,
       temperature: opts.temperature ?? 0.5,
       maxTokens: opts.maxTokens ?? 1024,
-    })
-  },
-
-  openrouter: (opts: OpenRouterOptions) => {
-    return new ChatOpenAI({
-      modelName: opts.openrouterModel || 'openrouter/auto',
-      configuration: {
-        apiKey: opts.openrouterAPIKey,
-        baseURL: 'https://openrouter.ai/api/v1',
-      },
-      temperature: opts.temperature ?? 0.7,
-      maxTokens: opts.maxTokens ?? 800,
     })
   },
 
@@ -315,6 +323,8 @@ async function executeAgentFlow(model: BaseChatModel, options: AgentOptions): Pr
     }
     if (error.name === 'GraphRecursionError') {
       options.errorIssue.value = 'recursionLimitExceeded'
+    } else {
+      options.errorIssue.value = true
     }
     // TODO: more specific error handling based on LangGraph error
     console.error(error)

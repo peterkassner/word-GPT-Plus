@@ -1,6 +1,6 @@
 type IStringKeyMap = Record<string, any>
 
-type supportedPlatforms = 'official' | 'openrouter' | 'azure' | 'gemini' | 'ollama' | 'groq'
+type supportedPlatforms = 'official' | 'openrouter' | 'lmstudio' | 'azure' | 'gemini' | 'ollama' | 'groq'
 
 type insertTypes = 'replace' | 'append' | 'newLine' | 'NoAction'
 

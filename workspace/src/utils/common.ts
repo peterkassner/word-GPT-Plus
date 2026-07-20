@@ -12,7 +12,9 @@ export function checkAuth(auth: Auth): boolean {
     case 'official':
       return !!auth.apiKey
     case 'openrouter':
-      return !!auth.openrouterAPIKey || !!auth.apiKey
+      return !!auth.openrouterAPIKey
+    case 'lmstudio':
+      return !!auth.lmstudioAPIKey
     case 'azure':
       return !!auth.azureAPIKey
     case 'gemini':
@@ -32,6 +34,8 @@ export function formatProviderLabel(provider: string): string {
       return 'OpenAI'
     case 'openrouter':
       return 'OpenRouter'
+    case 'lmstudio':
+      return 'LM Studio'
     default:
       return provider
   }

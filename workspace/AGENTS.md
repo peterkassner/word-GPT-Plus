@@ -91,6 +91,20 @@ For agent-related changes, execute:
 - Keep tool schemas explicit and validated before invoking external providers
 - Add feature flags where possible (`Issue`-tracked) for remote/provider additions
 
+## Visible Version Marker
+
+- The add-in pane header must show a red visible build marker in place of the old `Assistant` text, formatted exactly as `vX.X.X -- mm.dd.yy`.
+- The marker source is `src/utils/appVersion.ts`; the npm package version in `package.json` must match the `appVersion` value.
+- Any repo code update must bump `package.json` `version`, update `src/utils/appVersion.ts` `appVersion`, and update `appVersionDate` to the current date in `mm.dd.yy` format.
+- Before declaring a LAN add-in update live, verify the Windows/LAN task pane can load the rebuilt bundle and that the visible marker reflects the new version/date.
+
+## LAN Manifest And Word Cache
+
+- For LAN Word add-in deployments, bump the Office add-in manifest identity with `yarn bump:manifest:id` whenever the task pane bundle or manifest-facing behavior changes.
+- The canonical Windows catalog manifest is `references/gg-laptop-docx-runtime-apps/manifest.xml`; `workspace/release/self-hosted/manifest.xml` is a symlink to that catalog target, and `workspace/release/self-hosted/manifest.lan.xml` must carry the same `<Id>`.
+- Clicking Reload inside the Word task pane is not enough after a manifest identity change. Reopen Word so Office reloads the sideloaded add-in registration.
+- Browser visits to `:3232` are useful for checking served assets and network reachability, but they are not a complete substitute for Word-hosted prompt testing.
+
 ## Config and settings governance
 
 Primary config surfaces:
