@@ -32,6 +32,7 @@ RUN chmod +x /entrypoint.sh /healthcheck.sh \
 ENV PORT=3100
 ENV LOG_DIR=/app/data/logs
 ENV NODE_ENV=production
+ENV HOST_SERVICE_HOST=host.docker.internal
 
 EXPOSE 80 3100
 

@@ -172,10 +172,10 @@ Governance rules:
 - The actual tool merge function in `src/pages/HomePage.vue` is **`getActiveToolsWithProviders()`**, not `getActiveTools()` as noted elsewhere in this file.
 
 ### MCP hub endpoints (local)
-- Both Memorix and Qdrant MCP servers are accessed via the MCP proxy hub at `http://127.0.0.1:8096` — the same port Cursor uses.
-- Memorix tools: `/servers/memorix/tools/list` and `/servers/memorix/tools/call`.
-- Qdrant tools: `/servers/Qdrant_Resources/tools/list` and `/servers/Qdrant_Resources/tools/call`.
-- The old Memorix forward path (`/api/tools/memorix`) was incorrect and has been fixed.
+- MCP-backed tool routes are browser-facing same-origin `/api/...` routes. The proxy server owns upstream host-service routing to the MCP proxy hub on port `8096`; in the Docker image this defaults to `http://host.docker.internal:8096`.
+- Qdrant bridge upstream: MCP JSON-RPC on `/servers/Qdrant_Resources/mcp`.
+- DocSuite bridge upstream: MCP JSON-RPC on `/servers/docsuite/mcp`.
+- Do not use REST-shaped `/servers/<name>/tools/list` or `/servers/<name>/tools/call` paths for MCP-backed tools; MPH exposes `tools/list` and `tools/call` as JSON-RPC methods on `/mcp`.
 - Memorix now has a settings GUI card in `SettingsPage.vue` (General tab), same as Qdrant.
 
 ### OpenRouter provider
@@ -208,7 +208,7 @@ Governance rules:
 
 ## Learned Workspace Facts
 
-- LAN sideload targets the Mac host (currently `192.168.1.71`): task pane UI on port **3232**, Node proxy on **3100** (`manifest.xml` SourceLocation uses :3232).
+- LAN sideload targets the Mac host (currently `192.168.1.71`): task pane UI on port **3232**, Node proxy on **3100** (`manifest.xml` SourceLocation uses :3232). The task pane should call `/api/...` on its own origin; direct `127.0.0.1` from the task pane resolves to the LAN client, not the Mac host.
 - Production Docker: single `word-gpt-plus` container runs nginx (80→host 3232) and Node proxy (3100) via `docker/entrypoint.sh`; compose uses `restart: unless-stopped`.
 - Alpine nginx in the Docker image needs `docker/nginx-default.conf`; stock `/etc/nginx/http.d/default.conf` returns 404 for static assets.
 - Docker image build runs `./node_modules/.bin/vite build` directly because `prebuild` manifest bump needs `references/` outside the build context.

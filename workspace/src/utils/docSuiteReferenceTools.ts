@@ -3,7 +3,6 @@ import { z } from 'zod'
 
 import { localStorageKey } from './enum'
 import { fetchJsonWithRetry } from './http'
-import { resolveProxyBase } from './proxyResolver'
 
 export interface DocSuiteToolDescriptor {
   tool_name?: string
@@ -11,6 +10,8 @@ export interface DocSuiteToolDescriptor {
   description?: string
   parameters_json_schema?: unknown
   returns_json_schema?: unknown
+  inputSchema?: unknown
+  outputSchema?: unknown
   transport?: unknown
 }
 
@@ -24,12 +25,9 @@ export interface DocSuiteToolRequestContext {
 
 export interface DocSuiteToolsConfig {
   enableDocSuiteReferenceTools: boolean
-  mcpProxyHubUrl: string
   docSuiteAgentId: string
   docSuiteToolsEndpoint: string
   docSuiteToolsCallEndpoint: string
-  docSuiteForwardToolsEndpoint?: string
-  docSuiteForwardToolsCallEndpoint?: string
   docSuiteToolTimeoutMs: number
   docSuiteMaxRetries: number
   context?: DocSuiteToolRequestContext
@@ -37,7 +35,6 @@ export interface DocSuiteToolsConfig {
 
 export const DEFAULT_DOCSUITE_CONFIG: DocSuiteToolsConfig = {
   enableDocSuiteReferenceTools: false,
-  mcpProxyHubUrl: resolveProxyBase('http://127.0.0.1:8096'),
   docSuiteAgentId: 'word-gpt-plus',
   docSuiteToolsEndpoint: '/api/tools/docsuite',
   docSuiteToolsCallEndpoint: '/api/tools/docsuite/call',
@@ -92,50 +89,19 @@ function clampNumber(raw: string | null | number | undefined, fallback: number):
   return fallback
 }
 
-function normalizeDocSuiteLocalEndpoint(raw: string | null, fallback: string): string {
-  const next = (raw || '').trim()
-  if (!next) return fallback
-  if (next.startsWith('/servers/')) return fallback
-  return next
-}
-
-function normalizeDocSuiteForwardEndpoint(raw: string | null): string | undefined {
-  const next = (raw || '').trim()
-  if (!next) return undefined
-  if (next.startsWith('/servers/')) return next
-  return undefined
-}
-
 function getToolProxyBase(): string {
-  const proxySetting = typeof window !== 'undefined' ? localStorage.getItem(localStorageKey.proxy) : null
-  const proxyBaseInput =
-    proxySetting && proxySetting.trim()
-      ? proxySetting
-      : typeof window === 'undefined'
-        ? 'http://localhost:3100'
-        : window.location.origin
-  return resolveProxyBase(proxyBaseInput)
+  if (typeof window === 'undefined') {
+    return 'http://localhost:3100'
+  }
+  return window.location.origin
 }
 
 export function getDocSuiteToolsConfigFromStorage(context: DocSuiteToolRequestContext = {}): DocSuiteToolsConfig {
-  const storedToolsEndpoint = localStorage.getItem(localStorageKey.docSuiteToolsEndpoint)
-  const storedCallEndpoint = localStorage.getItem(localStorageKey.docSuiteToolsCallEndpoint)
-
   return {
     enableDocSuiteReferenceTools: localStorage.getItem(localStorageKey.enableDocSuiteReferenceTools) === 'true',
-    mcpProxyHubUrl:
-      resolveProxyBase(localStorage.getItem(localStorageKey.mcpProxyHubUrl)) || DEFAULT_DOCSUITE_CONFIG.mcpProxyHubUrl,
     docSuiteAgentId: localStorage.getItem(localStorageKey.docSuiteAgentId) || DEFAULT_DOCSUITE_CONFIG.docSuiteAgentId,
-    docSuiteToolsEndpoint: normalizeDocSuiteLocalEndpoint(
-      storedToolsEndpoint,
-      DEFAULT_DOCSUITE_CONFIG.docSuiteToolsEndpoint,
-    ),
-    docSuiteToolsCallEndpoint: normalizeDocSuiteLocalEndpoint(
-      storedCallEndpoint,
-      DEFAULT_DOCSUITE_CONFIG.docSuiteToolsCallEndpoint,
-    ),
-    docSuiteForwardToolsEndpoint: normalizeDocSuiteForwardEndpoint(storedToolsEndpoint),
-    docSuiteForwardToolsCallEndpoint: normalizeDocSuiteForwardEndpoint(storedCallEndpoint),
+    docSuiteToolsEndpoint: DEFAULT_DOCSUITE_CONFIG.docSuiteToolsEndpoint,
+    docSuiteToolsCallEndpoint: DEFAULT_DOCSUITE_CONFIG.docSuiteToolsCallEndpoint,
     docSuiteToolTimeoutMs: clampNumber(
       localStorage.getItem(localStorageKey.docSuiteToolTimeoutMs),
       DEFAULT_DOCSUITE_CONFIG.docSuiteToolTimeoutMs,
@@ -216,29 +182,23 @@ function schemaToZod(schema: any): z.ZodTypeAny {
 
 function normalizeDescriptorToToolInput(descriptor: DocSuiteToolDescriptor): { name: string; schema: z.ZodTypeAny } {
   const name = normalizeToolName(descriptor.tool_name || descriptor.name || 'docsuite_tool')
-  const schema = schemaToZod(descriptor.parameters_json_schema)
+  const schema = schemaToZod(descriptor.parameters_json_schema || descriptor.inputSchema)
   return { name, schema }
 }
 
 function buildLocalProxyUrl(
   endpoint: string,
   params: {
-    mcpProxyHubUrl: string
     docSuiteAgentId: string
     docSuiteToolTimeoutMs: number
     docSuiteMaxRetries: number
-    forwardEndpoint?: string
     toolName?: string
   },
 ): string {
   const base = new URL(endpoint, getToolProxyBase())
-  base.searchParams.set('mcpProxyHubUrl', params.mcpProxyHubUrl)
   base.searchParams.set('agentId', params.docSuiteAgentId)
   base.searchParams.set('docSuiteToolTimeoutMs', String(params.docSuiteToolTimeoutMs))
   base.searchParams.set('docSuiteMaxRetries', String(params.docSuiteMaxRetries))
-  if (params.forwardEndpoint) {
-    base.searchParams.set('forwardEndpoint', params.forwardEndpoint)
-  }
   if (params.toolName) {
     base.searchParams.set('toolName', params.toolName)
   }
@@ -313,11 +273,9 @@ function policyBlock(message: string): string {
 export async function getDocSuiteToolDescriptors(config: DocSuiteToolsConfig): Promise<DocSuiteToolDescriptor[]> {
   const url = new URL(
     buildLocalProxyUrl(config.docSuiteToolsEndpoint || DEFAULT_DOCSUITE_CONFIG.docSuiteToolsEndpoint, {
-      mcpProxyHubUrl: config.mcpProxyHubUrl || DEFAULT_DOCSUITE_CONFIG.mcpProxyHubUrl,
       docSuiteAgentId: config.docSuiteAgentId || DEFAULT_DOCSUITE_CONFIG.docSuiteAgentId,
       docSuiteToolTimeoutMs: config.docSuiteToolTimeoutMs || DEFAULT_DOCSUITE_CONFIG.docSuiteToolTimeoutMs,
       docSuiteMaxRetries: config.docSuiteMaxRetries || DEFAULT_DOCSUITE_CONFIG.docSuiteMaxRetries,
-      forwardEndpoint: config.docSuiteForwardToolsEndpoint,
     }),
   )
 
@@ -355,11 +313,9 @@ export async function invokeDocSuiteTool(
   const callEndpoint = buildLocalProxyUrl(
     config.docSuiteToolsCallEndpoint || DEFAULT_DOCSUITE_CONFIG.docSuiteToolsCallEndpoint,
     {
-      mcpProxyHubUrl: config.mcpProxyHubUrl || DEFAULT_DOCSUITE_CONFIG.mcpProxyHubUrl,
       docSuiteAgentId: config.docSuiteAgentId || DEFAULT_DOCSUITE_CONFIG.docSuiteAgentId,
       docSuiteToolTimeoutMs: config.docSuiteToolTimeoutMs || DEFAULT_DOCSUITE_CONFIG.docSuiteToolTimeoutMs,
       docSuiteMaxRetries: config.docSuiteMaxRetries || DEFAULT_DOCSUITE_CONFIG.docSuiteMaxRetries,
-      forwardEndpoint: config.docSuiteForwardToolsCallEndpoint,
       toolName,
     },
   )

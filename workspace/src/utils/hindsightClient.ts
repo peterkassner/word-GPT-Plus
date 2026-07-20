@@ -10,7 +10,6 @@ import type {
   HindsightRetainRequest,
   HindsightRetainResponse,
 } from './hindsightTypes'
-import { resolveProxyBase } from './proxyResolver'
 
 export class HindsightClient {
   private baseUrl: string
@@ -19,7 +18,7 @@ export class HindsightClient {
   private maxRetries: number
 
   constructor(config: HindsightConfig) {
-    this.baseUrl = resolveProxyBase(config.hindsightBaseUrl).replace(/\/$/, '')
+    this.baseUrl = config.hindsightBaseUrl.replace(/\/+$/, '')
     this.apiKey = config.hindsightApiKey
     this.timeoutMs = config.hindsightToolTimeoutMs
     this.maxRetries = config.hindsightMaxRetries
@@ -37,7 +36,7 @@ export class HindsightClient {
   }
 
   private async request<T>(path: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
-    const url = `${this.baseUrl}${path};`
+    const url = `${this.baseUrl}${path}`
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs)

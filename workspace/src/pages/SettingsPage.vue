@@ -89,11 +89,6 @@
               </p>
               <div v-if="settingForm.enableHindsightTools" class="flex flex-col gap-2">
                 <CustomInput
-                  v-model="settingForm.hindsightBaseUrl"
-                  title="Hindsight base URL"
-                  placeholder="http://127.0.0.1:8888"
-                />
-                <CustomInput
                   v-model="settingForm.hindsightMemoryBankId"
                   title="Memory bank ID"
                   placeholder="word-gpt-plus"
@@ -135,24 +130,9 @@
               </p>
               <div v-if="settingForm.enableQdrantResourcesTools" class="flex flex-col gap-2">
                 <CustomInput
-                  v-model="settingForm.mcpProxyHubUrl"
-                  title="MCP proxy hub URL"
-                  placeholder="http://127.0.0.1:8096"
-                />
-                <CustomInput
                   v-model="settingForm.qdrantResourcesAgentId"
                   title="Qdrant agent ID"
                   placeholder="word-gpt-plus"
-                />
-                <CustomInput
-                  v-model="settingForm.qdrantResourcesToolsEndpoint"
-                  title="Qdrant tools list endpoint"
-                  placeholder="/api/tools/qdrant"
-                />
-                <CustomInput
-                  v-model="settingForm.qdrantResourcesToolsCallEndpoint"
-                  title="Qdrant tools call endpoint"
-                  placeholder="/api/tools/qdrant/call"
                 />
                 <CustomInput
                   v-model.number="settingForm.qdrantResourcesToolTimeoutMs"
@@ -184,24 +164,9 @@
               </p>
               <div v-if="settingForm.enableDocSuiteReferenceTools" class="flex flex-col gap-2">
                 <CustomInput
-                  v-model="settingForm.mcpProxyHubUrl"
-                  title="MCP proxy hub URL"
-                  placeholder="http://127.0.0.1:8096"
-                />
-                <CustomInput
                   v-model="settingForm.docSuiteAgentId"
                   title="DocSuite agent ID"
                   placeholder="word-gpt-plus"
-                />
-                <CustomInput
-                  v-model="settingForm.docSuiteToolsEndpoint"
-                  title="DocSuite tools list endpoint"
-                  placeholder="/api/tools/docsuite"
-                />
-                <CustomInput
-                  v-model="settingForm.docSuiteToolsCallEndpoint"
-                  title="DocSuite tools call endpoint"
-                  placeholder="/api/tools/docsuite/call"
                 />
                 <CustomInput
                   v-model.number="settingForm.docSuiteToolTimeoutMs"
@@ -659,14 +624,7 @@ const settingForm = useSettingForm()
 const migrateLegacy3232Endpoints = () => {
   if (typeof window === 'undefined') return
 
-  const keysToMigrate: string[] = [
-    localStorageKey.proxy,
-    localStorageKey.qdrantResourcesToolsEndpoint,
-    localStorageKey.qdrantResourcesToolsCallEndpoint,
-    localStorageKey.docSuiteToolsEndpoint,
-    localStorageKey.docSuiteToolsCallEndpoint,
-    localStorageKey.hindsightBaseUrl,
-  ]
+  const keysToMigrate: string[] = [localStorageKey.proxy]
 
   const normalize = (raw: string): string => {
     const trimmed = raw.trim()
@@ -995,7 +953,6 @@ const buildConfigSnapshot = () => {
     redactionEnabled: settingForm.value.telemetryRedactSensitive,
     hindsight: {
       enableHindsightTools: settingForm.value.enableHindsightTools,
-      hindsightBaseUrl: settingForm.value.hindsightBaseUrl,
       hindsightMemoryBankId: settingForm.value.hindsightMemoryBankId,
       hindsightApiKey: settingForm.value.hindsightApiKey,
       hindsightToolTimeoutMs: settingForm.value.hindsightToolTimeoutMs,
@@ -1004,20 +961,14 @@ const buildConfigSnapshot = () => {
     qdrantResources: {
       enableQdrantResourcesTools: settingForm.value.enableQdrantResourcesTools,
       qdrantResourcesAgentId: settingForm.value.qdrantResourcesAgentId,
-      qdrantResourcesToolsEndpoint: settingForm.value.qdrantResourcesToolsEndpoint,
-      qdrantResourcesToolsCallEndpoint: settingForm.value.qdrantResourcesToolsCallEndpoint,
       qdrantResourcesToolTimeoutMs: settingForm.value.qdrantResourcesToolTimeoutMs,
       qdrantResourcesMaxRetries: settingForm.value.qdrantResourcesMaxRetries,
-      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
     },
     docSuiteReferences: {
       enableDocSuiteReferenceTools: settingForm.value.enableDocSuiteReferenceTools,
       docSuiteAgentId: settingForm.value.docSuiteAgentId,
-      docSuiteToolsEndpoint: settingForm.value.docSuiteToolsEndpoint,
-      docSuiteToolsCallEndpoint: settingForm.value.docSuiteToolsCallEndpoint,
       docSuiteToolTimeoutMs: settingForm.value.docSuiteToolTimeoutMs,
       docSuiteMaxRetries: settingForm.value.docSuiteMaxRetries,
-      mcpProxyHubUrl: settingForm.value.mcpProxyHubUrl,
     },
     telemetry: {
       telemetryEnabled: settingForm.value.telemetryEnabled,

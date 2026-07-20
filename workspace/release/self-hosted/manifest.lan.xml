@@ -12,7 +12,7 @@
   <!-- Begin Basic Settings: Add-in metadata, used for all versions of Office unless override provided. -->
 
   <!-- IMPORTANT! Id must be unique for your add-in, if you reuse this ID ensure you change it to a new GUID. -->
-  <Id>2a9842d6-c680-4104-bf06-10c9e84cee1f</Id>
+  <Id>ab3a81b3-3e34-486a-b5e1-9067e125031e</Id>
 
   <!--Version. Updates from the store only get triggered if there is a version change. -->
   <Version>1.0.0.3</Version>

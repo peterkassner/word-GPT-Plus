@@ -10,23 +10,29 @@ import { URL } from 'node:url'
 const PORT = Number(process.env.PORT || 3100)
 const LOG_DIR = process.env.LOG_DIR || `${process.cwd()}/logs`
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*'
+const HOST_SERVICE_HOST = process.env.HOST_SERVICE_HOST || '127.0.0.1'
+const MCP_PROXY_HUB_URL =
+  process.env.MCP_PROXY_HUB_URL || process.env.MEMORIX_PROXY_HUB_URL || `http://${HOST_SERVICE_HOST}:8096`
+const MCP_PROTOCOL_VERSION = '2024-11-05'
+const QDRANT_SERVER_NAME = 'Qdrant_Resources'
 const QDRANT_DISCOVER_PATH = '/api/tools/qdrant'
 const QDRANT_CALL_PATH = '/api/tools/qdrant/call'
-const QDRANT_FORWARD_DISCOVER_PATH = '/servers/Qdrant_Resources/tools/list'
-const QDRANT_FORWARD_CALL_PATH = '/servers/Qdrant_Resources/tools/call'
+const QDRANT_MCP_PATH = `/servers/${QDRANT_SERVER_NAME}/mcp`
+const DOCSUITE_SERVER_NAME = 'docsuite'
 const DOCSUITE_DISCOVER_PATH = '/api/tools/docsuite'
 const DOCSUITE_CALL_PATH = '/api/tools/docsuite/call'
-const DOCSUITE_FORWARD_DISCOVER_PATH = '/servers/docSuite/tools/list'
-const DOCSUITE_FORWARD_CALL_PATH = '/servers/docSuite/tools/call'
+const DOCSUITE_MCP_PATH = `/servers/${DOCSUITE_SERVER_NAME}/mcp`
+const HINDSIGHT_PROXY_PATH = '/api/hindsight'
+const HINDSIGHT_TARGET = process.env.HINDSIGHT_BASE_URL || `http://${HOST_SERVICE_HOST}:8888`
 const TELEMETRY_PATH = '/api/telemetry'
 
 const providerTargets = {
   openai: 'https://api.openai.com/v1',
   openrouter: 'https://openrouter.ai/api/v1',
-  lmstudio: process.env.LMSTUDIO_ENDPOINT || 'http://127.0.0.1:1234/v1',
+  lmstudio: process.env.LMSTUDIO_ENDPOINT || `http://${HOST_SERVICE_HOST}:1234/v1`,
   groq: 'https://api.groq.com/openai/v1',
   gemini: 'https://generativelanguage.googleapis.com',
-  ollama: process.env.OLLAMA_ENDPOINT || 'http://localhost:11434',
+  ollama: process.env.OLLAMA_ENDPOINT || `http://${HOST_SERVICE_HOST}:11434`,
 }
 
 function stripSearchParam(parsedUrl, paramName) {
@@ -164,11 +170,174 @@ async function resolveLogDir() {
   }
 }
 
+function getMcpHeaders(sessionId = '') {
+  return {
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+    ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+  }
+}
+
+function parseMcpResponseText(text) {
+  const trimmed = (text || '').trim()
+  if (!trimmed) return null
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    // Streamable HTTP may return SSE framing. The final data line is the JSON-RPC message.
+  }
+
+  const lines = trimmed.split(/\r?\n/).reverse()
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line || line === 'data: [DONE]') continue
+    const candidate = line.startsWith('data:') ? line.slice(5).trim() : line
+    if (!candidate) continue
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      // keep scanning
+    }
+  }
+
+  return null
+}
+
+function assertMcpResult(message, methodName, rawText) {
+  if (!message) {
+    throw new Error(`MCP ${methodName} returned no JSON-RPC message: ${(rawText || '').slice(0, 500)}`)
+  }
+  if (message.error) {
+    throw new Error(`MCP ${methodName} error: ${JSON.stringify(message.error).slice(0, 1000)}`)
+  }
+  return message.result || {}
+}
+
+async function postMcpRpc(mcpUrl, payload, headers, config) {
+  const response = await fetchWithRetry(
+    mcpUrl,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+  const responseText = await response.text()
+  if (!response.ok) {
+    throw new Error(`MCP ${payload.method || 'request'} HTTP ${response.status}: ${responseText.slice(0, 1000)}`)
+  }
+  return {
+    message: parseMcpResponseText(responseText),
+    sessionId: response.headers.get('mcp-session-id') || headers['mcp-session-id'] || '',
+    responseText,
+  }
+}
+
+async function initializeMcpSession(mcpUrl, config, clientName) {
+  const init = await postMcpRpc(
+    mcpUrl,
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: {
+          name: `word-gpt-plus-${clientName}`,
+          version: '1',
+        },
+      },
+    },
+    getMcpHeaders(),
+    config,
+  )
+  assertMcpResult(init.message, 'initialize', init.responseText)
+
+  const headers = getMcpHeaders(init.sessionId)
+  await postMcpRpc(
+    mcpUrl,
+    {
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+      params: {},
+    },
+    headers,
+    config,
+  )
+
+  return headers
+}
+
+async function listMcpTools(mcpUrl, config, clientName) {
+  const headers = await initializeMcpSession(mcpUrl, config, clientName)
+  const response = await postMcpRpc(
+    mcpUrl,
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+      params: {},
+    },
+    headers,
+    config,
+  )
+  const result = assertMcpResult(response.message, 'tools/list', response.responseText)
+  return Array.isArray(result.tools) ? result.tools : []
+}
+
+async function callMcpTool(mcpUrl, toolName, args, config, clientName) {
+  if (!toolName || typeof toolName !== 'string') {
+    throw new Error('Missing MCP tool name')
+  }
+
+  const headers = await initializeMcpSession(mcpUrl, config, clientName)
+  const response = await postMcpRpc(
+    mcpUrl,
+    {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: args || {},
+      },
+    },
+    headers,
+    config,
+  )
+  return assertMcpResult(response.message, 'tools/call', response.responseText)
+}
+
+function normalizeMcpToolPayload(result) {
+  if (!result || typeof result !== 'object') return result ?? ''
+
+  if (Array.isArray(result.content)) {
+    const textParts = result.content
+      .map(entry => {
+        if (entry && typeof entry.text === 'string') return entry.text
+        if (entry && typeof entry === 'object') return JSON.stringify(entry)
+        return ''
+      })
+      .filter(Boolean)
+    if (textParts.length > 0) {
+      return textParts.join('\n')
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(result, 'structuredContent')) {
+    return result.structuredContent
+  }
+
+  return result
+}
+
 async function handleQdrantDiscover(req, res, logger, requestId) {
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
   const config = getQdrantProxyConfig(req.url || '/')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamPath = config.mcpEndpoint.startsWith('/') ? config.mcpEndpoint : `/${config.mcpEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
     res.writeHead(500, {
@@ -178,12 +347,7 @@ async function handleQdrantDiscover(req, res, logger, requestId) {
     res.end(JSON.stringify({ error: 'Invalid qdrant configuration: mcpProxyHubUrl points to the current proxy host' }))
     return
   }
-  const upstreamUrl = `${upstreamBase}${upstreamPath}`
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: config.agentId,
-    memorixToolTimeoutMs: String(config.timeoutMs),
-    memorixMaxRetries: String(config.maxRetries),
-  })
+  const targetUrl = `${upstreamBase}${upstreamPath}`
 
   logger.write({
     type: 'qdrant.discover.start',
@@ -192,52 +356,24 @@ async function handleQdrantDiscover(req, res, logger, requestId) {
     config,
   })
 
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-    },
-    config.maxRetries,
-    config.timeoutMs,
-  )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
+  const tools = await listMcpTools(targetUrl, config, 'qdrant')
+  res.writeHead(200, {
     'Access-Control-Allow-Origin': CORS_ORIGIN,
     'Content-Type': 'application/json',
   })
   logger.write({
     type: 'qdrant.discover.response',
     requestId,
-    status: response.status,
-    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+    status: 200,
+    toolCount: tools.length,
   })
 
-  if (!response.ok) {
-    res.end(JSON.stringify({ error: responseText || 'qdrant discover failed', status: response.status }))
-    return
-  }
-
-  if (!responseText) {
-    res.end('[]')
-    return
-  }
-
-  try {
-    const parsed = JSON.parse(responseText)
-    const payload = Array.isArray(parsed) ? parsed : parsed.tools || parsed.toolDescriptors || []
-    res.end(JSON.stringify(payload))
-  } catch {
-    res.end(JSON.stringify({ error: 'invalid discover response', raw: responseText.slice(0, 4096) }))
-  }
+  res.end(JSON.stringify(tools))
 }
 
 async function handleQdrantCall(req, res, logger, requestId) {
   const config = getQdrantProxyConfig(req.url || '/')
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamPath = config.mcpEndpoint.startsWith('/') ? config.mcpEndpoint : `/${config.mcpEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
     res.writeHead(500, {
@@ -273,28 +409,15 @@ async function handleQdrantCall(req, res, logger, requestId) {
     requestIdFromClient: payload.requestId,
   })
 
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: payload.agentId,
-    memorixToolTimeoutMs: String(config.timeoutMs),
-    memorixMaxRetries: String(config.maxRetries),
-  })
-
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    },
-    config.maxRetries,
-    config.timeoutMs,
+  const result = await callMcpTool(
+    upstreamUrl,
+    payload.toolName || config.toolName,
+    payload.arguments || {},
+    config,
+    'qdrant',
   )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
+  const normalizedPayload = normalizeMcpToolPayload(result)
+  res.writeHead(200, {
     'Access-Control-Allow-Origin': CORS_ORIGIN,
     'Content-Type': 'application/json',
   })
@@ -302,23 +425,24 @@ async function handleQdrantCall(req, res, logger, requestId) {
   logger.write({
     type: 'qdrant.call.response',
     requestId,
-    status: response.status,
+    status: 200,
     toolName: payload.toolName || parsedBody.toolName || config.toolName,
-    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+    isError: result?.isError === true,
+    bodyPreview: JSON.stringify(normalizedPayload).slice(0, 2048),
   })
 
-  if (!responseText) {
-    res.end('{}')
-    return
-  }
-  res.end(responseText)
+  res.end(
+    JSON.stringify({
+      ...(result?.isError ? { error: normalizedPayload || 'MCP tool returned error' } : {}),
+      payload: normalizedPayload,
+      result,
+    }),
+  )
 }
 
 async function handleDocSuiteDiscover(req, res, logger, requestId) {
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
   const config = getDocSuiteProxyConfig(req.url || '/')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.toolEndpoint
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamPath = config.mcpEndpoint.startsWith('/') ? config.mcpEndpoint : `/${config.mcpEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
     res.writeHead(500, {
@@ -330,12 +454,7 @@ async function handleDocSuiteDiscover(req, res, logger, requestId) {
     )
     return
   }
-  const upstreamUrl = `${upstreamBase}${upstreamPath}`
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: config.agentId,
-    docSuiteToolTimeoutMs: String(config.timeoutMs),
-    docSuiteMaxRetries: String(config.maxRetries),
-  })
+  const targetUrl = `${upstreamBase}${upstreamPath}`
 
   logger.write({
     type: 'docsuite.discover.start',
@@ -344,52 +463,24 @@ async function handleDocSuiteDiscover(req, res, logger, requestId) {
     config,
   })
 
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-    },
-    config.maxRetries,
-    config.timeoutMs,
-  )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
+  const tools = await listMcpTools(targetUrl, config, 'docsuite')
+  res.writeHead(200, {
     'Access-Control-Allow-Origin': CORS_ORIGIN,
     'Content-Type': 'application/json',
   })
   logger.write({
     type: 'docsuite.discover.response',
     requestId,
-    status: response.status,
-    bodyPreview: responseText ? responseText.slice(0, 2048) : '',
+    status: 200,
+    toolCount: tools.length,
   })
 
-  if (!response.ok) {
-    res.end(JSON.stringify({ error: responseText || 'docsuite discover failed', status: response.status }))
-    return
-  }
-
-  if (!responseText) {
-    res.end('[]')
-    return
-  }
-
-  try {
-    const parsed = JSON.parse(responseText)
-    const payload = Array.isArray(parsed) ? parsed : parsed.tools || parsed.toolDescriptors || []
-    res.end(JSON.stringify(payload))
-  } catch {
-    res.end(JSON.stringify({ error: 'invalid discover response', raw: responseText.slice(0, 4096) }))
-  }
+  res.end(JSON.stringify(tools))
 }
 
 async function handleDocSuiteCall(req, res, logger, requestId) {
   const config = getDocSuiteProxyConfig(req.url || '/')
-  const requestUrl = new URL(req.url || '/', 'http://localhost')
-  const forwardEndpoint = requestUrl.searchParams.get('forwardEndpoint') || config.callEndpoint
-  const upstreamPath = forwardEndpoint.startsWith('/') ? forwardEndpoint : `/${forwardEndpoint}`
+  const upstreamPath = config.mcpEndpoint.startsWith('/') ? config.mcpEndpoint : `/${config.mcpEndpoint}`
   const upstreamBase = config.mcpProxyHubUrl.replace(/\/+$/, '')
   if (isSelfLoopUrl(config.mcpProxyHubUrl, req.headers.host || '')) {
     res.writeHead(500, {
@@ -427,28 +518,15 @@ async function handleDocSuiteCall(req, res, logger, requestId) {
     requestIdFromClient: payload.requestId,
   })
 
-  const targetUrl = withProxyQuery(upstreamUrl, {
-    agentId: payload.agentId,
-    docSuiteToolTimeoutMs: String(config.timeoutMs),
-    docSuiteMaxRetries: String(config.maxRetries),
-  })
-
-  const response = await fetchWithRetry(
-    targetUrl,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify(payload),
-    },
-    config.maxRetries,
-    config.timeoutMs,
+  const result = await callMcpTool(
+    upstreamUrl,
+    payload.toolName || config.toolName,
+    payload.arguments || {},
+    config,
+    'docsuite',
   )
-
-  const responseText = await response.text()
-  res.writeHead(response.status, {
+  const normalizedPayload = normalizeMcpToolPayload(result)
+  res.writeHead(200, {
     'Access-Control-Allow-Origin': CORS_ORIGIN,
     'Content-Type': 'application/json',
   })
@@ -456,15 +534,69 @@ async function handleDocSuiteCall(req, res, logger, requestId) {
   logger.write({
     type: 'docsuite.call.response',
     requestId,
-    status: response.status,
+    status: 200,
     toolName: payload.toolName || parsedBody.toolName || config.toolName,
+    isError: result?.isError === true,
+    bodyPreview: JSON.stringify(normalizedPayload).slice(0, 2048),
+  })
+
+  res.end(
+    JSON.stringify({
+      ...(result?.isError ? { error: normalizedPayload || 'MCP tool returned error' } : {}),
+      payload: normalizedPayload,
+      result,
+    }),
+  )
+}
+
+async function handleHindsightProxy(req, res, logger, requestId) {
+  const parsed = new URL(req.url || '/', 'http://localhost')
+  const config = getHindsightProxyConfig(req.url || '/')
+  const upstreamBase = config.targetBase.replace(/\/+$/, '')
+  const tail = parsed.pathname === HINDSIGHT_PROXY_PATH ? '/' : parsed.pathname.slice(HINDSIGHT_PROXY_PATH.length)
+  const upstreamPath = tail.startsWith('/') ? tail : `/${tail}`
+  const upstreamUrl = `${upstreamBase}${upstreamPath}${parsed.search}`
+  const requestBody = req.method === 'GET' ? '' : await getRequestBodyBody(req)
+
+  logger.write({
+    type: 'hindsight.proxy.start',
+    requestId,
+    upstream: upstreamUrl,
+    request: {
+      method: req.method,
+      headers: sanitizeHeaders(buildUpstreamHeaders(req.headers)),
+      bodyPreview: requestBody ? requestBody.slice(0, 2048) : null,
+    },
+  })
+
+  const response = await fetchWithRetry(
+    upstreamUrl,
+    {
+      method: req.method,
+      headers: buildUpstreamHeaders(req.headers),
+      body: requestBody || undefined,
+    },
+    config.maxRetries,
+    config.timeoutMs,
+  )
+
+  const responseText = await response.text()
+  copyResponseHeaders(response, res)
+  res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN)
+  res.statusCode = response.status
+
+  const responseHeaders = {}
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value
+  })
+  logger.write({
+    type: 'hindsight.proxy.response',
+    requestId,
+    status: response.status,
+    responseHeaders: sanitizeHeaders(responseHeaders),
     bodyPreview: responseText ? responseText.slice(0, 2048) : '',
   })
 
-  if (!responseText) {
-    res.end('{}')
-    return
-  }
   res.end(responseText)
 }
 
@@ -653,22 +785,9 @@ function parseNumeric(value, fallback) {
 function getQdrantProxyConfig(reqUrl) {
   const url = new URL(reqUrl, 'http://localhost')
   return {
-    mcpProxyHubUrl:
-      url.searchParams.get('mcpProxyHubUrl') ||
-      process.env.QDRANT_PROXY_HUB_URL ||
-      process.env.MEMORIX_PROXY_HUB_URL ||
-      'http://localhost:8096',
+    mcpProxyHubUrl: process.env.QDRANT_PROXY_HUB_URL || MCP_PROXY_HUB_URL,
     agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
-    toolEndpoint:
-      url.searchParams.get('qdrantToolsEndpoint') ||
-      url.searchParams.get('forwardEndpoint') ||
-      process.env.QDRANT_TOOLS_ENDPOINT ||
-      QDRANT_FORWARD_DISCOVER_PATH,
-    callEndpoint:
-      url.searchParams.get('qdrantToolsCallEndpoint') ||
-      url.searchParams.get('forwardEndpoint') ||
-      process.env.QDRANT_TOOLS_CALL_ENDPOINT ||
-      QDRANT_FORWARD_CALL_PATH,
+    mcpEndpoint: process.env.QDRANT_MCP_ENDPOINT || QDRANT_MCP_PATH,
     timeoutMs: parseNumeric(
       url.searchParams.get('qdrantToolTimeoutMs') || url.searchParams.get('memorixToolTimeoutMs'),
       12000,
@@ -681,22 +800,9 @@ function getQdrantProxyConfig(reqUrl) {
 function getDocSuiteProxyConfig(reqUrl) {
   const url = new URL(reqUrl, 'http://localhost')
   return {
-    mcpProxyHubUrl:
-      url.searchParams.get('mcpProxyHubUrl') ||
-      process.env.DOCSUITE_PROXY_HUB_URL ||
-      process.env.MEMORIX_PROXY_HUB_URL ||
-      'http://localhost:8096',
+    mcpProxyHubUrl: process.env.DOCSUITE_PROXY_HUB_URL || MCP_PROXY_HUB_URL,
     agentId: url.searchParams.get('agentId') || 'word-gpt-plus',
-    toolEndpoint:
-      url.searchParams.get('docSuiteToolsEndpoint') ||
-      url.searchParams.get('forwardEndpoint') ||
-      process.env.DOCSUITE_TOOLS_ENDPOINT ||
-      DOCSUITE_FORWARD_DISCOVER_PATH,
-    callEndpoint:
-      url.searchParams.get('docSuiteToolsCallEndpoint') ||
-      url.searchParams.get('forwardEndpoint') ||
-      process.env.DOCSUITE_TOOLS_CALL_ENDPOINT ||
-      DOCSUITE_FORWARD_CALL_PATH,
+    mcpEndpoint: process.env.DOCSUITE_MCP_ENDPOINT || DOCSUITE_MCP_PATH,
     timeoutMs: parseNumeric(
       url.searchParams.get('docSuiteToolTimeoutMs') || url.searchParams.get('memorixToolTimeoutMs'),
       12000,
@@ -709,13 +815,13 @@ function getDocSuiteProxyConfig(reqUrl) {
   }
 }
 
-function withProxyQuery(url, queryParams) {
-  if (!url || !queryParams) return url
-  const target = new URL(url, 'http://localhost')
-  Object.entries(queryParams).forEach(([key, value]) => {
-    if (value) target.searchParams.set(key, value)
-  })
-  return target.toString()
+function getHindsightProxyConfig(reqUrl) {
+  const url = new URL(reqUrl, 'http://localhost')
+  return {
+    targetBase: HINDSIGHT_TARGET,
+    timeoutMs: parseNumeric(url.searchParams.get('hindsightToolTimeoutMs'), 12000),
+    maxRetries: parseNumeric(url.searchParams.get('hindsightMaxRetries'), 2),
+  }
 }
 
 function isSelfLoopUrl(rawUrl, requestHost) {
@@ -825,9 +931,11 @@ async function handleRequest(req, res) {
       ? 'qdrant'
       : pathname === DOCSUITE_DISCOVER_PATH || pathname === DOCSUITE_CALL_PATH
         ? 'docsuite'
-        : pathname === TELEMETRY_PATH
-          ? 'telemetry'
-          : 'proxy')
+        : pathname === HINDSIGHT_PROXY_PATH || pathname.startsWith(`${HINDSIGHT_PROXY_PATH}/`)
+          ? 'hindsight'
+          : pathname === TELEMETRY_PATH
+            ? 'telemetry'
+            : 'proxy')
   const logDir = await resolveLogDir()
   let logger = createNoopLogger()
   if (logDir) {
@@ -915,6 +1023,26 @@ async function handleRequest(req, res) {
     return
   }
 
+  if (pathname === HINDSIGHT_PROXY_PATH || pathname.startsWith(`${HINDSIGHT_PROXY_PATH}/`)) {
+    try {
+      await handleHindsightProxy(req, res, logger, requestId)
+    } catch (error) {
+      logger.write({
+        type: 'hindsight.proxy.error',
+        requestId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      res.writeHead(502, {
+        'Access-Control-Allow-Origin': CORS_ORIGIN,
+        'Content-Type': 'application/json',
+      })
+      res.end(JSON.stringify({ error: 'Hindsight proxy failed' }))
+    } finally {
+      logger.close()
+    }
+    return
+  }
+
   if (pathname === TELEMETRY_PATH) {
     try {
       await handleTelemetryRequest(req, res, logger, requestId)
@@ -951,6 +1079,7 @@ async function handleRequest(req, res) {
           '/api/gemini',
           '/api/azure',
           '/api/ollama',
+          HINDSIGHT_PROXY_PATH,
           TELEMETRY_PATH,
           QDRANT_DISCOVER_PATH,
           QDRANT_CALL_PATH,

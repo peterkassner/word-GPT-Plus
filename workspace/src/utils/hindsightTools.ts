@@ -20,7 +20,7 @@ export interface HindsightToolRequestContext {
 
 export const DEFAULT_HINDSIGHT_CONFIG: HindsightConfig = {
   enableHindsightTools: false,
-  hindsightBaseUrl: 'http://127.0.0.1:8888',
+  hindsightBaseUrl: '/api/hindsight',
   hindsightMemoryBankId: 'word-gpt-plus',
   hindsightToolTimeoutMs: 12000,
   hindsightMaxRetries: 2,
@@ -33,8 +33,10 @@ function clampNumber(raw: string | null | number | undefined, fallback: number):
 }
 
 function getHindsightBaseUrl(): string {
-  const stored = typeof window !== 'undefined' ? localStorage.getItem(localStorageKey.hindsightBaseUrl) : null
-  return stored && stored.trim() ? stored : DEFAULT_HINDSIGHT_CONFIG.hindsightBaseUrl
+  if (typeof window === 'undefined') {
+    return 'http://localhost:3100/api/hindsight'
+  }
+  return `${window.location.origin.replace(/\/+$/, '')}${DEFAULT_HINDSIGHT_CONFIG.hindsightBaseUrl}`
 }
 
 function getHindsightMemoryBankId(): string {

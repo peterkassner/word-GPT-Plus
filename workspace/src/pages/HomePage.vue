@@ -797,14 +797,7 @@ const summarizeTelemetryPayload = (payload: unknown): string => {
 const migrateLegacy3232Endpoints = () => {
   if (typeof window === 'undefined') return
 
-  const keysToMigrate: string[] = [
-    localStorageKey.proxy,
-    localStorageKey.qdrantResourcesToolsEndpoint,
-    localStorageKey.qdrantResourcesToolsCallEndpoint,
-    localStorageKey.docSuiteToolsEndpoint,
-    localStorageKey.docSuiteToolsCallEndpoint,
-    localStorageKey.hindsightBaseUrl,
-  ]
+  const keysToMigrate: string[] = [localStorageKey.proxy]
 
   const normalize = (raw: string): string => {
     const trimmed = raw.trim()
